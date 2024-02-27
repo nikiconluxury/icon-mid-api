@@ -78,7 +78,7 @@ async def process_row(row):
 
         if task_id:
             print(f"Task ID received: {task_id}. Starting to poll for completion...")
-            await asyncio.sleep(30)  # Wait for 5 seconds before polling, asynchronously
+            await asyncio.sleep(90)  # Wait for 5 seconds before polling, asynchronously
 
             # try:
                 # Polling the task status with a timeout

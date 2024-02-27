@@ -146,7 +146,7 @@ async def process_payload(payload: dict):
         provided_file_path = payload.get('filePath')
         send_to_email = payload.get('sendToEmail')
         preferred_image_method = payload.get('preferredImageMethod')
-        semaphore = asyncio.Semaphore(100)  # Limit to 100 concurrent tasks to avoid overloading
+        semaphore = asyncio.Semaphore(125)  # Limit to 100 concurrent tasks to avoid overloading
 
         # Create a temporary directory to save downloaded images
         uuid = str(generate_unique_id_for_path()[:8])
