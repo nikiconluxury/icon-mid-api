@@ -191,7 +191,8 @@ async def process_payload(payload: dict):
             with open(local_filename, "wb") as file:
                 file.write(response.content)
         except requests.RequestException as e:
-            # Handle request errors here
+            # Handle request errors here 
+            logger.info('Failed to download file: ',e)
             print(f"Failed to download file: {e}")
             return {"error": "Failed to download the provided file."}
         
@@ -208,7 +209,7 @@ async def process_payload(payload: dict):
         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
     except Exception as e:
-        # Log the exception and handle it as needed
+        logger.info('Exception: ',e)
         print(f"An unexpected error occurred: {e}")
         # Optionally, save the error details to storage instead of proceeding with the email
         return {"error": "An unexpected error occurred during processing."}
@@ -291,59 +292,78 @@ def imageDownload(url, imageName, newpath, s):
 
 def generate_unique_id_for_path():
     return str(uuid.uuid4())
-
-
 def verify_png_image_single(image_path):
-        try:
-            img = IMG.open(image_path)
-            img.getdata()[0]
-        except OSError as osexfc:
-            # ! logging.error("IMAGE verify ERROR: %s " % osexfc)
-            print(osexfc)
-        imageSize = os.path.getsize(image_path)
-        print("IMAGE SIZE " + str(imageSize))
+    try:
+        img = IMG.open(image_path)
+        img.verify()  # I'm using verify() method to check if it's a valid image
+        logging.info(f"Image verified successfully: {image_path}")
+    except Exception as e:
+        logging.error(f"IMAGE verify ERROR: {e}, for image: {image_path}")
+        return False
 
-        if imageSize < 3000:
-            print("File Corrrupted")
-            return False
+    imageSize = os.path.getsize(image_path)
+    logging.debug(f"Image size: {imageSize} bytes")
 
-        # try:
-        # crop_extra_background_space(image_path)
-        # except:
-        # print("could not be cropped")
-        # ! logging.error("could not be cropped")
-        # ! logging.error(image_path)
-        try:
-            resize_image(image_path)
-        except:
-            print("could not be resized")
-            # !  logging.error(image_path)
-        return True
+    if imageSize < 3000:
+        logging.warning(f"File may be corrupted or too small: {image_path}")
+        return False
+
+    try:
+        resize_image(image_path)
+    except Exception as e:
+        logging.error(f"Error resizing image: {e}, for image: {image_path}")
+        return False
+    return True
+
+# def verify_png_image_single(image_path):
+#         try:
+#             img = IMG.open(image_path)
+#             img.getdata()[0]
+#         except OSError as osexfc:
+#             # ! logging.error("IMAGE verify ERROR: %s " % osexfc)
+#             print(osexfc)
+#         imageSize = os.path.getsize(image_path)
+#         print("IMAGE SIZE " + str(imageSize))
+
+#         if imageSize < 3000:
+#             print("File Corrrupted")
+#             return False
+
+#         # try:
+#         # crop_extra_background_space(image_path)
+#         # except:
+#         # print("could not be cropped")
+#         # ! logging.error("could not be cropped")
+#         # ! logging.error(image_path)
+#         try:
+#             resize_image(image_path)
+#         except:
+#             print("could not be resized")
+#             # !  logging.error(image_path)
+#         return True
+# 
 def resize_image(image_path):
-        try:
-            img = IMG.open(image_path)
-        
-        
-            MAXSIZE = 145
-            if img:
-                # scale the image to fit your requirements
-                h, w = img.height, img.width  # original size
-                print("old size: ", h, w)
-                if h > MAXSIZE or w > MAXSIZE:
-                    if h > w:
-                        w = int(w * MAXSIZE / h)
-                        h = MAXSIZE
-                    else:
-                        h = int(h * MAXSIZE / w)
-                        w = MAXSIZE
-                print("new size: ", h, w)
-                newImg = img.resize((w, h))
-                newImg.save(image_path)
-                return True
-        except Exception as e:
-                print(e)
-                return False
-                
+    try:
+        img = IMG.open(image_path)
+        MAXSIZE = 145
+        if img:
+            h, w = img.height, img.width  # original size
+            logging.debug(f"Original size: height={h}, width={w}")
+            if h > MAXSIZE or w > MAXSIZE:
+                if h > w:
+                    w = int(w * MAXSIZE / h)
+                    h = MAXSIZE
+                else:
+                    h = int(h * MAXSIZE / w)
+                    w = MAXSIZE
+            logging.debug(f"Resized to: height={h}, width={w}")
+            newImg = img.resize((w, h))
+            newImg.save(image_path)
+            logging.info(f"Image resized and saved: {image_path}")
+            return True
+    except Exception as e:
+        logging.error(f"Error resizing image: {e}, for image: {image_path}")
+        return False               
 def write_excel_image(local_filename, temp_dir, preferred_image_method):
     # Load the workbook and select the active worksheet
     wb = load_workbook(local_filename)
@@ -362,7 +382,7 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
             continue  # Skip files that do not match the expected naming convention
 
         # Check if the image meets the criteria to be added
-        if verify_png_image_single(image_path) and resize_image(image_path):
+        if verify_png_image_single(image_path):
             logging.info('Inserting image')
             img = openpyxl.drawing.image.Image(image_path)
             # Determine the anchor point based on the preferred image method
