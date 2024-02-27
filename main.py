@@ -220,35 +220,83 @@ def download_all_images(data, save_path):
         threads.append(thread)
     for thread in threads:
         thread.join()
-
-def imageDownload(url, imageName, newpath, s):
-    timeout = 60
+def imageDownload(url, image_name, new_path, session):
+    timeout = 120
     headers = {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
         "accept-encoding": "gzip, deflate, br",
         "accept-language": "en-US,en;q=0.9",
         "upgrade-insecure-requests": "1",
         "user-agent": "Mozilla/5.0"
     }
-    if ('/' in imageName) or ('\\' in imageName):
+    
+    if ('/' in image_name) or ('\\' in image_name):
+        print("Invalid image name.")
         return False
+    
     try:
-        response = s.get(url, headers=headers, timeout=timeout, stream=True)
+        response = session.get(url, headers=headers, timeout=timeout, stream=True)
         if not response.ok:
-            print(response)
-            return
-        image_format = 'png' if ".webp" not in url else 'webp'
-        image_path = os.path.join(newpath, f"{imageName}.{image_format}")
-        with open(image_path, 'wb') as handle:
+            print(f"Failed to download image. Response: {response}")
+            return False
+        
+        content_type = response.headers['content-type']
+        image_format = content_type.split('/')[-1]  # Extracts format from content-type
+        
+        # Determine the file extension (default to .png for unrecognized formats)
+        file_extension = 'png' if image_format not in ['jpeg', 'png', 'gif', 'bmp', 'webp'] else image_format
+        
+        temp_image_path = os.path.join(new_path, f"{image_name}.{file_extension}")
+        
+        # Save the image temporarily in its original format
+        with open(temp_image_path, 'wb') as handle:
             for block in response.iter_content(1024):
                 if not block:
                     break
                 handle.write(block)
-        if image_format == 'webp':
-            im = Image.open(image_path).convert("RGB")
-            im.save(os.path.join(newpath, f"{imageName}.png"), 'png')
+        
+        # Convert and save the image as PNG
+        final_image_path = os.path.join(new_path, f"{image_name}.png")
+        with IMG.open(temp_image_path) as img:
+            img.convert("RGB").save(final_image_path, 'PNG')
+        
+        # Clean up the temporary file if it's different from the final format
+        if file_extension != 'png':
+            os.remove(temp_image_path)
+        
+        print(f"Image downloaded and converted to PNG: {final_image_path}")
+        return True
     except Exception as exc:
-        print(f"Error downloading image {imageName} from {url}: {exc}")
+        print(f"Error downloading or converting image {image_name} from {url}: {exc}")
+        return False
+# def imageDownload(url, imageName, newpath, s):
+#     timeout = 120
+#     headers = {
+#         "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
+#         "accept-encoding": "gzip, deflate, br",
+#         "accept-language": "en-US,en;q=0.9",
+#         "upgrade-insecure-requests": "1",
+#         "user-agent": "Mozilla/5.0"
+#     }
+#     if ('/' in imageName) or ('\\' in imageName):
+#         return False
+#     try:
+#         response = s.get(url, headers=headers, timeout=timeout, stream=True)
+#         if not response.ok:
+#             print(response)
+#             return
+#         image_format = 'png' if ".webp" not in url else 'webp'
+#         image_path = os.path.join(newpath, f"{imageName}.{image_format}")
+#         with open(image_path, 'wb') as handle:
+#             for block in response.iter_content(1024):
+#                 if not block:
+#                     break
+#                 handle.write(block)
+#         if image_format == 'webp':
+#             im = Image.open(image_path).convert("RGB")
+#             im.save(os.path.join(newpath, f"{imageName}.png"), 'png')
+#     except Exception as exc:
+#         print(f"Error downloading image {imageName} from {url}: {exc}")
 
 def verify_png_image_single(image_path):
     try:
