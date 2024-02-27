@@ -1,0 +1,16 @@
+pytest==8.0.0
+pytest-cov==4.1.0
+pylint==3.0.3
+black==24.1.1
+fire==0.5.0
+requests==2.31.0
+fastapi==0.109.2
+uvicorn==0.27.0.post1
+httpx==0.26.0
+python-multipart
+aiohttp
+pandas
+openpyxl 
+sendgrid
+boto3
+python-dotenv

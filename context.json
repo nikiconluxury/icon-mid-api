@@ -1,0 +1,31 @@
+{
+    "rowData": [
+        {
+            "absoluteRowIndex": 85,
+            "searchValue": "A83770-MNAN07-1498",
+            "brandValue": "Sergio Rossi",
+            "imageValue": "Style Ref"
+        },
+        {
+            "absoluteRowIndex": 86,
+            "searchValue": "A83770-MNAN07-2122",
+            "brandValue": "Sergio Rossi",
+            "imageValue": "Style Ref"
+        },
+        {
+            "absoluteRowIndex": 104,
+            "searchValue": "A86431-MVIL19-8102",
+            "brandValue": "Sergio Rossi",
+            "imageValue": "Style Ref"
+        },
+        {
+            "absoluteRowIndex": 105,
+            "searchValue": "A86730-MFN882-9003",
+            "brandValue": "Sergio Rossi",
+            "imageValue": ""
+        }
+    ],
+    "preferredImageMethod": "overwrite",
+    "filePath": "https://nyc3.digitaloceanspaces.com/iconluxurygroup-s3/a2650940-SergioRossiOPG1357.xlsx",
+    "sendToEmail": "joe@iconluxurygroup.com"
+}
