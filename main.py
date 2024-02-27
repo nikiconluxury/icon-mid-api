@@ -102,54 +102,25 @@ def send_email(to_emails, subject, download_url, excel_file_path):
         print(response.headers)
     except Exception as e:
         print(e)
+async def create_temp_dirs(unique_id):
+    loop = asyncio.get_running_loop()  # Get the current loop directly
+    base_dir = os.path.join(os.getcwd(), 'temp_files')
+    temp_images_dir = os.path.join(base_dir, 'images', unique_id)
+    temp_excel_dir = os.path.join(base_dir, 'excel', unique_id)
 
+    await loop.run_in_executor(None, lambda: os.makedirs(temp_images_dir, exist_ok=True))
+    await loop.run_in_executor(None, lambda: os.makedirs(temp_excel_dir, exist_ok=True))
+
+    return temp_images_dir, temp_excel_dir
+
+async def cleanup_temp_dirs(directories):
+    loop = asyncio.get_running_loop()  # Get the current loop directly
+    for dir_path in directories:
+        await loop.run_in_executor(None, lambda dp=dir_path: shutil.rmtree(dp, ignore_errors=True))
 
 
 
 app = FastAPI()
-
-# @app.post("/process-image-batch/")
-# async def process_payload(payload: dict):
-#     rows = payload.get('rowData', [])
-#     provided_file_path = payload.get('filePath')
-#     send_to_email = payload.get('sendToEmail')
-#     preferred_image_method = payload.get('preferredImageMethod')
-#     semaphore = asyncio.Semaphore(100)  # Limit to 150 concurrent tasks
-
-#     # Create a temporary directory to save downloaded images
-#     uuid = str(generate_unique_id_for_path()[:8])
-#     temp_dir = 'temp_images/'
-#     temp_dir = os.path.join(os.getcwd(), temp_dir +uuid )
-#     os.makedirs(temp_dir, exist_ok=True)
-
-#     async def process_with_semaphore(row):
-#         async with semaphore:
-#             return await process_row(row)
-
-#     tasks = [process_with_semaphore(row) for row in rows]
-#     results = await asyncio.gather(*tasks)
-
-#     clean_results = prepare_images_for_download(results)
-#     download_all_images(clean_results, temp_dir)
-    
-#     folder_loc = os.path.join(os.getcwd(), "temp_excl_files", uuid)
-#     os.makedirs(folder_loc, exist_ok=True)  # Create the directory if it does not exist
-    
-#     local_filename = os.path.join(folder_loc, provided_file_path.split('/')[-1])
-    
-#     file_loc = os.path.join(folder_loc,local_filename)
-#     response = requests.get(provided_file_path, allow_redirects=True)
-#     open(local_filename, "wb").write(response.content)
-#     write_excel_image(local_filename,temp_dir,preferred_image_method)
-#     print(file_loc)
-    
-#     public_url = upload_file_to_space(file_loc, local_filename, is_public=True)
-
-#     send_email(send_to_email, 'Your File Is Ready', public_url, file_loc)
-
-#     clean_temp_dir(temp_dir, folder_loc)
-#     return {"message": "Processing completed.", "results": results}
-
 @app.post("/process-image-batch/")
 async def process_payload(payload: dict):
     logger.info("Received request to process image batch")
@@ -160,14 +131,11 @@ async def process_payload(payload: dict):
         send_to_email = payload.get('sendToEmail')
         preferred_image_method = payload.get('preferredImageMethod')
         semaphore = asyncio.Semaphore(125)  # Limit concurrent tasks to avoid overloading
-
+        loop = asyncio.get_running_loop()
         # Create a temporary directory to save downloaded images
-        unique_id = str(generate_unique_id_for_path()[:8])
-        static_temp = os.path.join(os.getcwd(), 'temp_images')
-        os.makedirs(static_temp, exist_ok=True)
-        temp_dir = os.path.join(static_temp, unique_id)
-        os.makedirs(temp_dir, exist_ok=True)
-        
+        unique_id = str(uuid.uuid4())[:8]
+        temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
+            
         tasks = [process_with_semaphore(row, semaphore) for row in rows]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -176,7 +144,7 @@ async def process_payload(payload: dict):
             return {"error": "An error occurred during processing."}
         print(results)
         logger.info("Downloading images")
-        loop = asyncio.get_running_loop()
+
         
         
         
@@ -184,11 +152,9 @@ async def process_payload(payload: dict):
         clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results)
         print(clean_results)
         logger.info("clean_results: {}".format(clean_results))
-        await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_dir)
+        await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
 
-        folder_loc = os.path.join(os.getcwd(), "temp_excl_files", unique_id)
-        os.makedirs(folder_loc, exist_ok=True)
-        local_filename = os.path.join(folder_loc, provided_file_path.split('/')[-1])
+        local_filename = os.path.join(temp_excel_dir, provided_file_path.split('/')[-1])
 
         logger.info("Downloading Excel from web")
         response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
@@ -199,7 +165,7 @@ async def process_payload(payload: dict):
             file.write(response.content)
         
         logger.info("Writing images to Excel")
-        await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_dir, preferred_image_method)
+        await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
         
         logger.info("Uploading file to space")
         #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
@@ -208,7 +174,7 @@ async def process_payload(payload: dict):
         send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         
         logger.info("Cleaning up temporary directories")
-        clean_temp_dir(temp_dir, folder_loc)
+        await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
         
         logger.info("Processing completed successfully")
         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
@@ -220,27 +186,6 @@ async def process_payload(payload: dict):
 async def process_with_semaphore(row, semaphore):
     async with semaphore:
         return await process_row(row)  # Assuming process_row is an async function you've defined elsewhere
-
-
-def clean_temp_dir(temp_dir, folder_loc):
-    """
-    Deletes the specified temporary directories along with all their contents.
-
-    Args:
-    temp_dir (str): Path to the first temporary directory to be deleted.
-    folder_loc (str): Path to the second directory to be deleted.
-    """
-    # List to iterate through both directories
-    dirs_to_delete = [temp_dir, folder_loc]
-
-    for dir_path in dirs_to_delete:
-        try:
-            # Remove the directory and all its contents
-            shutil.rmtree(dir_path)
-            print(f"Successfully deleted: {dir_path}")
-        except OSError as e:
-            # Directory not found or other error
-            print(f"Error: {e.strerror} - {dir_path}")
 
 def prepare_images_for_download(results):
     images_to_download = []
@@ -305,8 +250,6 @@ def imageDownload(url, imageName, newpath, s):
     except Exception as exc:
         print(f"Error downloading image {imageName} from {url}: {exc}")
 
-def generate_unique_id_for_path():
-    return str(uuid.uuid4())
 def verify_png_image_single(image_path):
     try:
         img = IMG.open(image_path)
