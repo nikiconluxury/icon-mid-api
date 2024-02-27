@@ -194,6 +194,7 @@ async def process_payload(payload: dict):
             # Handle request errors here
             print(f"Failed to download file: {e}")
             return {"error": "Failed to download the provided file."}
+        
         logger.info("Writing images to Excel")
         write_excel_image(local_filename, temp_dir, preferred_image_method)
         logger.info("Uploading file to space")
@@ -343,7 +344,6 @@ def resize_image(image_path):
                 print(e)
                 return False
                 
-
 def write_excel_image(local_filename, temp_dir, preferred_image_method):
     # Load the workbook and select the active worksheet
     wb = load_workbook(local_filename)
@@ -356,42 +356,71 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
         try:
             # Assuming the file name can be directly converted to an integer row number
             row_number = int(image_file.split('.')[0])
-            print((row_number,image_path))
+            logging.info(f"Processing row {row_number}, image path: {image_path}")
         except ValueError:
+            logging.warning(f"Skipping file {image_file}: does not match expected naming convention")
             continue  # Skip files that do not match the expected naming convention
 
         # Check if the image meets the criteria to be added
         if verify_png_image_single(image_path) and resize_image(image_path):
-            print('inserting image')
+            logging.info('Inserting image')
             img = openpyxl.drawing.image.Image(image_path)
-            print(img)
-            print(preferred_image_method)
             # Determine the anchor point based on the preferred image method
             if preferred_image_method in ["overwrite", "append"]:
                 anchor = "A" + str(row_number)
-                print('anchor assigned')
+                logging.info('Anchor assigned')
             elif preferred_image_method == "NewColumn":
                 anchor = "B" + str(row_number)  # Example adjustment for a different method
             else:
-                print('unrec')
+                logging.error(f'Unrecognized preferred image method: {preferred_image_method}')
                 continue  # Skip if the method is not recognized
                 
             img.anchor = anchor
             ws.add_image(img)
             wb.save(local_filename)
+            logging.info(f'Image saved at {anchor}')
             
     # Finalize changes to the workbook
-    
+    logging.info('Finished processing all images.')
+# def write_excel_image(local_filename, temp_dir, preferred_image_method):
+#     # Load the workbook and select the active worksheet
+#     wb = load_workbook(local_filename)
+#     ws = wb.active
 
+#     # Iterate through each file in the temporary directory
+#     for image_file in os.listdir(temp_dir):
+#         image_path = os.path.join(temp_dir, image_file)
+#         # Extract row number or other identifier from the image file name
+#         try:
+#             # Assuming the file name can be directly converted to an integer row number
+#             row_number = int(image_file.split('.')[0])
+#             print((row_number,image_path))
+#         except ValueError:
+#             continue  # Skip files that do not match the expected naming convention
 
-
-
-
-
-async def send_completion_email(to_email, subject, file_url):
-    # Placeholder implementation
-    pass
+#         # Check if the image meets the criteria to be added
+#         if verify_png_image_single(image_path) and resize_image(image_path):
+#             print('inserting image')
+#             img = openpyxl.drawing.image.Image(image_path)
+#             print(img)
+#             print(preferred_image_method)
+#             # Determine the anchor point based on the preferred image method
+#             if preferred_image_method in ["overwrite", "append"]:
+#                 anchor = "A" + str(row_number)
+#                 print('anchor assigned')
+#             elif preferred_image_method == "NewColumn":
+#                 anchor = "B" + str(row_number)  # Example adjustment for a different method
+#             else:
+#                 print('unrec')
+#                 continue  # Skip if the method is not recognized
+                
+#             img.anchor = anchor
+#             ws.add_image(img)
+#             wb.save(local_filename)
+            
+    # Finalize changes to the workbook
 
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
-    uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
+    #uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
+    uvicorn.run("main:app", port=8000, host='0.0.0.0')
