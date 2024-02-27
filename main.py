@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import boto3
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Example usage
@@ -29,7 +29,7 @@ def get_spaces_client():
     logger.info("Spaces client created successfully")
     return client
 
-def upload_file_to_space(file_src, save_as, is_public=False, content_type=None, meta=None):
+def upload_file_to_space(file_src, save_as, is_public=True, content_type=None, meta=None):
     spaces_client = get_spaces_client()
     space_name = 'iconluxurygroup-s3'  # Your space name
     if not content_type:
@@ -149,6 +149,7 @@ app = FastAPI()
 
 #     clean_temp_dir(temp_dir, folder_loc)
 #     return {"message": "Processing completed.", "results": results}
+
 @app.post("/process-image-batch/")
 async def process_payload(payload: dict):
     logger.info("Received request to process image batch")
@@ -158,60 +159,62 @@ async def process_payload(payload: dict):
         provided_file_path = payload.get('filePath')
         send_to_email = payload.get('sendToEmail')
         preferred_image_method = payload.get('preferredImageMethod')
-        semaphore = asyncio.Semaphore(125)  # Limit to 100 concurrent tasks to avoid overloading
+        semaphore = asyncio.Semaphore(125)  # Limit concurrent tasks to avoid overloading
 
         # Create a temporary directory to save downloaded images
-        uuid = str(generate_unique_id_for_path()[:8])
-        temp_dir = os.path.join(os.getcwd(), 'temp_images', uuid)
+        unique_id = str(generate_unique_id_for_path()[:8])
+        static_temp = os.path.join(os.getcwd(), 'temp_images')
+        os.makedirs(static_temp, exist_ok=True)
+        temp_dir = os.path.join(static_temp, unique_id)
         os.makedirs(temp_dir, exist_ok=True)
-        logger.info("Creating temporary directories")
+        
         tasks = [process_with_semaphore(row, semaphore) for row in rows]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Check for errors in results and handle them accordingly
+        
         if any(isinstance(result, Exception) for result in results):
-            # Handle or log errors here
-            # For example, save error details to storage instead of sending an email
-            print("Error occurred, handling it.")
-            # Return or handle error
+            logger.error("Error occurred during image processing.")
             return {"error": "An error occurred during processing."}
+        print(results)
         logger.info("Downloading images")
-        clean_results = prepare_images_for_download(results)
-        download_all_images(clean_results, temp_dir)
+        loop = asyncio.get_running_loop()
+        
+        
+        
+        
+        clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results)
+        print(clean_results)
+        logger.info("clean_results: {}".format(clean_results))
+        await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_dir)
 
-        folder_loc = os.path.join(os.getcwd(), "temp_excl_files", uuid)
+        folder_loc = os.path.join(os.getcwd(), "temp_excl_files", unique_id)
         os.makedirs(folder_loc, exist_ok=True)
-
         local_filename = os.path.join(folder_loc, provided_file_path.split('/')[-1])
-        file_loc = os.path.join(folder_loc,local_filename)
-        # Ensure the URL is valid and accessible before attempting to download
+
         logger.info("Downloading Excel from web")
-        try:
-            response = requests.get(provided_file_path, allow_redirects=True, timeout=10)
-            with open(local_filename, "wb") as file:
-                file.write(response.content)
-        except requests.RequestException as e:
-            # Handle request errors here 
-            logger.info('Failed to download file: ',e)
-            print(f"Failed to download file: {e}")
+        response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
+        if response.status_code != 200:
+            logger.error(f"Failed to download file: {response.status_code}")
             return {"error": "Failed to download the provided file."}
+        with open(local_filename, "wb") as file:
+            file.write(response.content)
         
         logger.info("Writing images to Excel")
-        write_excel_image(local_filename, temp_dir, preferred_image_method)
+        await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_dir, preferred_image_method)
+        
         logger.info("Uploading file to space")
-        public_url = upload_file_to_space(file_loc, local_filename, is_public=True)
+        #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
+        public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename)
         logger.info("Sending email")
-        # Only send an email if everything was successful
-        send_email(send_to_email, 'Your File Is Ready', public_url,file_loc)
+        send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
+        
         logger.info("Cleaning up temporary directories")
         clean_temp_dir(temp_dir, folder_loc)
+        
         logger.info("Processing completed successfully")
         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
     except Exception as e:
-        logger.info('Exception: ',e)
-        print(f"An unexpected error occurred: {e}")
-        # Optionally, save the error details to storage instead of proceeding with the email
+        logger.exception("An unexpected error occurred during processing.")
         return {"error": "An unexpected error occurred during processing."}
 
 async def process_with_semaphore(row, semaphore):
@@ -240,19 +243,31 @@ def clean_temp_dir(temp_dir, folder_loc):
             print(f"Error: {e.strerror} - {dir_path}")
 
 def prepare_images_for_download(results):
-    filtered_results = [
-        (result['absoluteRowIndex'], result['result']['url'])
-        for result in results
-        if result.get('absoluteRowIndex') is not None and 
-           result.get('result') and 
-           result['result'].get('url') not in [None, '', '[]']
-    ]
-    return filtered_results
+    images_to_download = []
+
+    for package in results:
+        # Ensure the 'result' key is available and its 'status' is 'Completed'.
+        if package.get('result', {}).get('status') == 'Completed':
+            # Iterate over each 'result' entry if it exists and is a list.
+            for result_entry in package.get('result', {}).get('result', []):
+                # Check if the entry is 'Completed' and contains a 'result' key with a URL.
+                if result_entry.get('status') == 'Completed' and isinstance(result_entry.get('result'), dict):
+                    result_data = result_entry.get('result')
+                    url = result_data.get('url')
+                    if url:  # Ensure the URL is not None or empty.
+                        images_to_download.append((package.get('absoluteRowIndex'), url))
+
+    if not images_to_download:
+        raise Exception("No valid image URLs found in the results")
+
+    return images_to_download
+
 
 def download_all_images(data, save_path):
     s = requests.Session()
     threads = []
     for item in data:
+        logger.info(f"Downloading image: {item[1]}")
         image_url = item[1].strip("[]'\"")  # Remove the brackets and quotes
         input_sku = item[0]  # Grab the input SKU
         thread = threading.Thread(target=imageDownload, args=(str(image_url), str(input_sku), save_path, s))
@@ -380,9 +395,9 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
         except ValueError:
             logging.warning(f"Skipping file {image_file}: does not match expected naming convention")
             continue  # Skip files that do not match the expected naming convention
-
+        verify_image = verify_png_image_single(image_path)    
         # Check if the image meets the criteria to be added
-        if verify_png_image_single(image_path):
+        if verify_image:
             logging.info('Inserting image')
             img = openpyxl.drawing.image.Image(image_path)
             # Determine the anchor point based on the preferred image method
@@ -399,48 +414,11 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
             ws.add_image(img)
             wb.save(local_filename)
             logging.info(f'Image saved at {anchor}')
-            
+        logging.warning('Inserting image skipped due to verify_png_image_single failure.')    
     # Finalize changes to the workbook
     logging.info('Finished processing all images.')
-# def write_excel_image(local_filename, temp_dir, preferred_image_method):
-#     # Load the workbook and select the active worksheet
-#     wb = load_workbook(local_filename)
-#     ws = wb.active
-
-#     # Iterate through each file in the temporary directory
-#     for image_file in os.listdir(temp_dir):
-#         image_path = os.path.join(temp_dir, image_file)
-#         # Extract row number or other identifier from the image file name
-#         try:
-#             # Assuming the file name can be directly converted to an integer row number
-#             row_number = int(image_file.split('.')[0])
-#             print((row_number,image_path))
-#         except ValueError:
-#             continue  # Skip files that do not match the expected naming convention
-
-#         # Check if the image meets the criteria to be added
-#         if verify_png_image_single(image_path) and resize_image(image_path):
-#             print('inserting image')
-#             img = openpyxl.drawing.image.Image(image_path)
-#             print(img)
-#             print(preferred_image_method)
-#             # Determine the anchor point based on the preferred image method
-#             if preferred_image_method in ["overwrite", "append"]:
-#                 anchor = "A" + str(row_number)
-#                 print('anchor assigned')
-#             elif preferred_image_method == "NewColumn":
-#                 anchor = "B" + str(row_number)  # Example adjustment for a different method
-#             else:
-#                 print('unrec')
-#                 continue  # Skip if the method is not recognized
-                
-#             img.anchor = anchor
-#             ws.add_image(img)
-#             wb.save(local_filename)
-            
-    # Finalize changes to the workbook
 
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
-    #uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
-    uvicorn.run("main:app", port=8000, host='0.0.0.0')
+    uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
+    #uvicorn.run("main:app", port=8000, host='0.0.0.0')

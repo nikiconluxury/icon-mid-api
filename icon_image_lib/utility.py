@@ -6,7 +6,7 @@ from httpx import ConnectTimeout
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 async def create_image_task(dataset_split):
     try:
@@ -40,7 +40,7 @@ async def poll_task_status(task_id, timeout=1000):
                     logger.error(f"Task {task_id} failed or encountered an error with data: {data}")
                     return {'error': 'Task failed or encountered an error'}
                 else:
-                    await asyncio.sleep(60)  # Poll every 60 seconds
+                    await asyncio.sleep(10)  # Poll every 60 seconds
     except Exception as e:
         logger.exception(f"Exception occurred while polling task {task_id}")
         raise
@@ -86,7 +86,7 @@ async def process_row(row):
 
         if task_id:
             logger.info(f"Task ID {task_id} received, starting to poll for completion...")
-            await asyncio.sleep(180)  # Wait for 3 minutes before polling, asynchronously
+            await asyncio.sleep(30)  # Wait for 3 minutes before polling, asynchronously
 
             result = await asyncio.wait_for(poll_task_status(task_id), timeout=1000)  # Example timeout
 
