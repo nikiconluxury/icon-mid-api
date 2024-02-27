@@ -6,12 +6,12 @@ from httpx import ConnectTimeout
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 async def create_image_task(dataset_split):
     try:
         logger.info("Attempting to create an image task")
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=None) as client:
             response = await client.post("https://supreme-space-waddle-q777pqp5gpwwc6645-8080.app.github.dev/api/v1/image/create", json={"dataset_split": dataset_split})
             result = response.json()
             logger.info(f"Image task created successfully with response: {result}")
@@ -21,10 +21,10 @@ async def create_image_task(dataset_split):
         raise
 
 
-async def poll_task_status(task_id, timeout=99999999):
+async def poll_task_status(task_id, timeout=1000):
     try:
         logger.info(f"Starting to poll task status for task_id: {task_id}")
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=None) as client:
             start_time = asyncio.get_event_loop().time()
             while True:
                 current_time = asyncio.get_event_loop().time()
@@ -88,7 +88,7 @@ async def process_row(row):
             logger.info(f"Task ID {task_id} received, starting to poll for completion...")
             await asyncio.sleep(180)  # Wait for 3 minutes before polling, asynchronously
 
-            result = await asyncio.wait_for(poll_task_status(task_id), timeout=99999999)  # Example timeout
+            result = await asyncio.wait_for(poll_task_status(task_id), timeout=1000)  # Example timeout
 
             if result:
                 logger.info(f"Task {task_id} completed with result: {result}")
