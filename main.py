@@ -7,16 +7,26 @@ from openpyxl.drawing.image import Image
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import boto3
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Example usage
+logger.info("Informational message")
+logger.error("Error message")
 
 load_dotenv()
 
 def get_spaces_client():
+    logger.info("Creating spaces client")
     session = boto3.session.Session()
     client = session.client('s3',
-                            region_name='nyc3',  # Or your DigitalOcean Spaces region
+                            region_name='nyc3',
                             endpoint_url=os.getenv('SPACES_ENDPOINT'),
                             aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
                             aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'))
+    logger.info("Spaces client created successfully")
     return client
 
 def upload_file_to_space(file_src, save_as, is_public=False, content_type=None, meta=None):
@@ -65,7 +75,7 @@ def send_email(to_emails, subject, download_url, excel_file_path):
 """
 
     message = Mail(
-        from_email='iconluxurygroup@popovtech.com',
+        from_email='distrotool@iconluxurygroup.com',
         to_emails=to_emails,
         subject=subject,
         html_content=html_content
@@ -141,7 +151,9 @@ app = FastAPI()
 #     return {"message": "Processing completed.", "results": results}
 @app.post("/process-image-batch/")
 async def process_payload(payload: dict):
+    logger.info("Received request to process image batch")
     try:
+        logger.info(f"Processing started for payload: {payload}")
         rows = payload.get('rowData', [])
         provided_file_path = payload.get('filePath')
         send_to_email = payload.get('sendToEmail')
@@ -152,7 +164,7 @@ async def process_payload(payload: dict):
         uuid = str(generate_unique_id_for_path()[:8])
         temp_dir = os.path.join(os.getcwd(), 'temp_images', uuid)
         os.makedirs(temp_dir, exist_ok=True)
-
+        logger.info("Creating temporary directories")
         tasks = [process_with_semaphore(row, semaphore) for row in rows]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -163,7 +175,7 @@ async def process_payload(payload: dict):
             print("Error occurred, handling it.")
             # Return or handle error
             return {"error": "An error occurred during processing."}
-
+        logger.info("Downloading images")
         clean_results = prepare_images_for_download(results)
         download_all_images(clean_results, temp_dir)
 
@@ -173,6 +185,7 @@ async def process_payload(payload: dict):
         local_filename = os.path.join(folder_loc, provided_file_path.split('/')[-1])
         file_loc = os.path.join(folder_loc,local_filename)
         # Ensure the URL is valid and accessible before attempting to download
+        logger.info("Downloading Excel from web")
         try:
             response = requests.get(provided_file_path, allow_redirects=True, timeout=10)
             with open(local_filename, "wb") as file:
@@ -181,16 +194,16 @@ async def process_payload(payload: dict):
             # Handle request errors here
             print(f"Failed to download file: {e}")
             return {"error": "Failed to download the provided file."}
-
+        logger.info("Writing images to Excel")
         write_excel_image(local_filename, temp_dir, preferred_image_method)
-
+        logger.info("Uploading file to space")
         public_url = upload_file_to_space(file_loc, local_filename, is_public=True)
-
+        logger.info("Sending email")
         # Only send an email if everything was successful
         send_email(send_to_email, 'Your File Is Ready', public_url,file_loc)
-
+        logger.info("Cleaning up temporary directories")
         clean_temp_dir(temp_dir, folder_loc)
-
+        logger.info("Processing completed successfully")
         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
     except Exception as e:
@@ -380,4 +393,5 @@ async def send_completion_email(to_email, subject, file_url):
     pass
 
 if __name__ == "__main__":
+    logger.info("Starting Uvicorn server")
     uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
