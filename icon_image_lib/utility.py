@@ -17,7 +17,7 @@ async def create_image_task(dataset_split):
             logger.info(f"Image task created successfully with response: {result}")
             return result
     except Exception as e:
-        logger.exception("Failed to create image task")
+        logger.exception(f"Failed to create image task with exception: {e}")
         raise
 
 
@@ -42,7 +42,7 @@ async def poll_task_status(task_id, timeout=1000):
                 else:
                     await asyncio.sleep(60)  # Poll every 60 seconds
     except Exception as e:
-        logger.exception(f"Exception occurred while polling task {task_id}")
+        logger.exception(f"Exception occurred while polling task {task_id} Exception: {e}")
         raise
 
 

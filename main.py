@@ -57,7 +57,7 @@ def upload_file_to_space(file_src, save_as, is_public=True, content_type=None, m
 
 
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
 from base64 import b64encode
 def send_email(to_emails, subject, download_url, excel_file_path):
     # Encode the URL if necessary (example shown, adjust as needed)
@@ -73,14 +73,11 @@ def send_email(to_emails, subject, download_url, excel_file_path):
 </body>
 </html>
 """
-
     message = Mail(
         from_email='distrotool@iconluxurygroup.com',
-        to_emails=to_emails,
         subject=subject,
         html_content=html_content
     )
-
     # Read and encode the Excel file
     with open(excel_file_path, 'rb') as f:
         excel_data = f.read()
@@ -94,6 +91,11 @@ def send_email(to_emails, subject, download_url, excel_file_path):
     )
     message.attachment = attachment
     
+    cc_recipient = 'notifications@popovtech.com'
+    personalization = Personalization()
+    personalization.add_cc(Cc(cc_recipient))
+    personalization.add_to(To(to_emails))
+    message.add_personalization(personalization)
     try:
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
@@ -102,6 +104,7 @@ def send_email(to_emails, subject, download_url, excel_file_path):
         print(response.headers)
     except Exception as e:
         print(e)
+        #raise
 async def create_temp_dirs(unique_id):
     loop = asyncio.get_running_loop()  # Get the current loop directly
     base_dir = os.path.join(os.getcwd(), 'temp_files')
