@@ -1,9 +1,12 @@
 #utility.py
 import asyncio
 import httpx
-import time
+import time,os
 from httpx import ConnectTimeout
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,7 +15,7 @@ async def create_image_task(dataset_split):
     try:
         logger.info("Attempting to create an image task")
         async with httpx.AsyncClient(timeout=None) as client:
-            response = await client.post("https://supreme-space-waddle-q777pqp5gpwwc6645-8080.app.github.dev/api/v1/image/create", json={"dataset_split": dataset_split})
+            response = await client.post(f"{os.environ.get('PRODUCTAPIENDPOINT')}/api/v1/image/create", json={"dataset_split": dataset_split})
             result = response.json()
             logger.info(f"Image task created successfully with response: {result}")
             return result
@@ -31,7 +34,7 @@ async def poll_task_status(task_id, timeout=1000):
                 if current_time - start_time > timeout:
                     logger.warning(f"Timeout reached for task {task_id}. Abandoning task.")
                     return {'error': 'Polling timeout reached. Task abandoned.'}
-                response = await client.get(f"https://supreme-space-waddle-q777pqp5gpwwc6645-8080.app.github.dev/api/v1/image/poll/{task_id}")
+                response = await client.get(f"{os.environ.get('PRODUCTAPIENDPOINT')}/api/v1/image/poll/{task_id}")
                 data = response.json()
                 if data['status'] == 'Completed':
                     logger.info(f"Task {task_id} completed successfully with data: {data}")
