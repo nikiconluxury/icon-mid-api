@@ -133,7 +133,7 @@ async def process_payload(payload: dict):
         provided_file_path = payload.get('filePath')
         send_to_email = payload.get('sendToEmail')
         preferred_image_method = payload.get('preferredImageMethod')
-        semaphore = asyncio.Semaphore(125)  # Limit concurrent tasks to avoid overloading
+        semaphore = asyncio.Semaphore(os.environ.get('MAX_THREAD'))  # Limit concurrent tasks to avoid overloading
         loop = asyncio.get_running_loop()
         # Create a temporary directory to save downloaded images
         unique_id = str(uuid.uuid4())[:8]
@@ -213,6 +213,7 @@ def prepare_images_for_download(results):
 
 def download_all_images(data, save_path):
     s = requests.Session()
+    #s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=2))
     threads = []
     for item in data:
         logger.info(f"Downloading image: {item[1]}")
