@@ -30,9 +30,11 @@ def get_spaces_client():
     logger.info("Spaces client created successfully")
     return client
 
-async def upload_file_to_space(file_src, save_as, is_public=True, content_type=None, meta=None):
+async def upload_file_to_space(file_src, save_as, is_public, content_type, meta=None):
     spaces_client = get_spaces_client()
     space_name = 'iconluxurygroup-s3'  # Your space name
+    print('Content Type')
+    print(content_type)
     if not content_type:
         content_type_guess = mimetypes.guess_type(file_src)[0]
         if not content_type_guess:
@@ -179,7 +181,8 @@ async def process_payload(payload: dict):
             
         logger.info("Uploading file to space")
         #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
-        public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,content_type=contenttype)
+        is_public = True
+        public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)
         logger.info("Sending email")
         send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         
