@@ -173,7 +173,7 @@ async def process_payload(payload: dict):
         failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
         print(f"failed rows: {failed_rows}")
         if failed_rows != []:
-            await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+            #await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
             logger.error(f"Failed to write images for rows: {failed_rows}")
             
         logger.info("Uploading file to space")
@@ -243,7 +243,7 @@ def prepare_images_for_download(results):
 
 def download_all_images(data, save_path):
     s = requests.Session()
-    #s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=2))
+    #s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=200))
     threads = []
     for item in data:
         logger.info(f"Downloading image: {item[1]}")
@@ -424,5 +424,5 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
 
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
-    uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
-    #uvicorn.run("main:app", port=8000, host='0.0.0.0')
+    #uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
+    uvicorn.run("main:app", port=8000, host='0.0.0.0')
