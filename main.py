@@ -5,7 +5,7 @@ from openpyxl import load_workbook
 from PIL import Image as IMG
 from openpyxl.drawing.image import Image
 from concurrent.futures import ThreadPoolExecutor
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import boto3
 import logging
 from openpyxl.utils import get_column_letter
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 logger.info("Informational message")
 logger.error("Error message")
 
-load_dotenv()
+#load_dotenv()
 
 def get_spaces_client():
     logger.info("Creating spaces client")
