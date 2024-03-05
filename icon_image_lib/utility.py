@@ -15,7 +15,7 @@ async def create_image_task(dataset_split):
     try:
         logger.info("Attempting to create an image task")
         async with httpx.AsyncClient(timeout=None) as client:
-            response = await client.post(f"{os.environ.get('PRODUCTAPIENDPOINT')}/api/v1/image/create", json={"dataset_split": dataset_split})
+            response = await client.post(f"{str(os.environ.get('PRODUCTAPIENDPOINT'))}/api/v1/image/create", json={"dataset_split": dataset_split})
             result = response.json()
             logger.info(f"Image task created successfully with response: {result}")
             return result
@@ -80,7 +80,7 @@ async def poll_task_status(task_id, timeout=1000):
 async def process_row(row):
     try:
         logger.info(f"Processing row: {row}")
-        dataset_split = [row.get('brandValue'), row.get('searchValue')]
+        dataset_split = [str(row.get('brandValue')), str(row.get('searchValue'))]
         absolute_row_index = row.get('absoluteRowIndex')
         original_search_value = row.get('searchValue')
 

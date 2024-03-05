@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import boto3
 import logging
+from openpyxl.utils import get_column_letter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -155,6 +156,7 @@ async def process_payload(payload: dict):
         clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results)
         print(clean_results)
         logger.info("clean_results: {}".format(clean_results))
+        
         await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
 
         local_filename = os.path.join(temp_excel_dir, provided_file_path.split('/')[-1])
@@ -168,8 +170,12 @@ async def process_payload(payload: dict):
             file.write(response.content)
         
         logger.info("Writing images to Excel")
-        await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
-        
+        failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
+        print(f"failed rows: {failed_rows}")
+        if failed_rows != []:
+            await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+            logger.error(f"Failed to write images for rows: {failed_rows}")
+            
         logger.info("Uploading file to space")
         #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
         public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename)
@@ -190,6 +196,30 @@ async def process_with_semaphore(row, semaphore):
     async with semaphore:
         return await process_row(row)  # Assuming process_row is an async function you've defined elsewhere
 
+
+async def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
+    # Load the workbook
+    workbook = openpyxl.load_workbook(excel_file_path)
+    
+    # Select the active worksheet or specify by name
+    worksheet = workbook.active  # or workbook.get_sheet_by_name('SheetName')
+    
+    # Convert clean_results to a dictionary for easier lookup
+    clean_results_dict = {row: url for row, url in clean_results}
+    
+    # Iterate over the failed rows
+    for row in failed_rows:
+        # Look up the URL in the clean_results_dict using the row as a key
+        url = clean_results_dict.get(row)
+        
+        if url:
+            # Write the URL to column A of the failed row
+            # Adjust the cell reference as needed (row index might need +1 depending on header row)
+            cell_reference = f"{get_column_letter(1)}{row}"  # Column A, row number
+            worksheet[cell_reference] = url
+    
+    # Save the workbook
+    workbook.save(excel_file_path)
 def prepare_images_for_download(results):
     images_to_download = []
 
@@ -325,33 +355,6 @@ def verify_png_image_single(image_path):
         return False
     return True
 
-# def verify_png_image_single(image_path):
-#         try:
-#             img = IMG.open(image_path)
-#             img.getdata()[0]
-#         except OSError as osexfc:
-#             # ! logging.error("IMAGE verify ERROR: %s " % osexfc)
-#             print(osexfc)
-#         imageSize = os.path.getsize(image_path)
-#         print("IMAGE SIZE " + str(imageSize))
-
-#         if imageSize < 3000:
-#             print("File Corrrupted")
-#             return False
-
-#         # try:
-#         # crop_extra_background_space(image_path)
-#         # except:
-#         # print("could not be cropped")
-#         # ! logging.error("could not be cropped")
-#         # ! logging.error(image_path)
-#         try:
-#             resize_image(image_path)
-#         except:
-#             print("could not be resized")
-#             # !  logging.error(image_path)
-#         return True
-# 
 def resize_image(image_path):
     try:
         img = IMG.open(image_path)
@@ -375,10 +378,12 @@ def resize_image(image_path):
         logging.error(f"Error resizing image: {e}, for image: {image_path}")
         return False               
 def write_excel_image(local_filename, temp_dir, preferred_image_method):
+    failed_rows = []
     # Load the workbook and select the active worksheet
     wb = load_workbook(local_filename)
     ws = wb.active
-
+    print(os.listdir(temp_dir))
+    
     # Iterate through each file in the temporary directory
     for image_file in os.listdir(temp_dir):
         image_path = os.path.join(temp_dir, image_file)
@@ -409,9 +414,13 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
             ws.add_image(img)
             wb.save(local_filename)
             logging.info(f'Image saved at {anchor}')
-        logging.warning('Inserting image skipped due to verify_png_image_single failure.')    
+        else:
+            failed_rows.append(row_number)
+            logging.warning('Inserting image skipped due to verify_png_image_single failure.')   
     # Finalize changes to the workbook
     logging.info('Finished processing all images.')
+    return failed_rows 
+
 
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
