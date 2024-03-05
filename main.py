@@ -160,7 +160,8 @@ async def process_payload(payload: dict):
         await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
 
         local_filename = os.path.join(temp_excel_dir, provided_file_path.split('/')[-1])
-
+        
+        contenttype = os.path.splitext(local_filename)[1]
         logger.info("Downloading Excel from web")
         response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
         if response.status_code != 200:
@@ -173,12 +174,12 @@ async def process_payload(payload: dict):
         failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
         print(f"failed rows: {failed_rows}")
         if failed_rows != []:
-            #await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+            await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
             logger.error(f"Failed to write images for rows: {failed_rows}")
             
         logger.info("Uploading file to space")
         #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
-        public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename)
+        public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,content_type=contenttype)
         logger.info("Sending email")
         send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         
