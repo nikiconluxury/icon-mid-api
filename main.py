@@ -30,7 +30,7 @@ def get_spaces_client():
     logger.info("Spaces client created successfully")
     return client
 
-def upload_file_to_space(file_src, save_as, is_public=True, content_type=None, meta=None):
+async def upload_file_to_space(file_src, save_as, is_public=True, content_type=None, meta=None):
     spaces_client = get_spaces_client()
     space_name = 'iconluxurygroup-s3'  # Your space name
     if not content_type:
