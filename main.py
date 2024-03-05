@@ -193,8 +193,8 @@ async def process_payload(payload: dict):
         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
     except Exception as e:
-        logger.exception("An unexpected error occurred during processing.")
-        return {"error": "An unexpected error occurred during processing."}
+        logger.exception("An unexpected error occurred during processing.",e)
+        return {"error": f"An unexpected error occurred during processing. Error: {e}"}
 
 async def process_with_semaphore(row, semaphore):
     async with semaphore:
