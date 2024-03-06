@@ -316,9 +316,9 @@ def build_headers(url):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         # "Referer": "Set this if needed based on your logic"
     }
-    if domain:
-        headers["Referer"] = f"https://{domain}/"
-        print(f"Headers: {headers['Referer']}")
+    #if domain:
+        #headers["Referer"] = f"https://{domain}/"
+        #print(f"Headers: {headers['Referer']}")
     # Additional dynamic header settings can go here.
     # Example for Referer (if applicable):
     # headers["Referer"] = f"https://{domain}/"
