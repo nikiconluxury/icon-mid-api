@@ -304,14 +304,6 @@ def build_headers(url):
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Encoding": "gzip, deflate, br, zstd",
         "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "max-age=0",
-        "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
         "Upgrade-Insecure-Requests": "1",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         # "Referer": "Set this if needed based on your logic"
@@ -333,8 +325,8 @@ def imageDownload(url, image_name, new_path, session, retry_count=3):
 
     fallback_formats = ['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']  # Expanded list of image formats
 
-    while retry_count > 0:
-        try:
+    #while retry_count > 0:
+    try:
             response = session.get(url, headers=headers, stream=True)
             if response.status_code == 200:
                 content_type = response.headers.get('content-type', '')
@@ -357,7 +349,8 @@ def imageDownload(url, image_name, new_path, session, retry_count=3):
                         logger.info(f"Image downloaded and converted to PNG: {final_image_path}")
                         break
                     except IOError:
-                        os.remove(temp_image_path)
+                        print('remove image?')
+                        #os.remove(temp_image_path)
 
                 if not saved:
                     logger.error(f"Failed to identify and convert image from URL: {url}")
@@ -366,10 +359,10 @@ def imageDownload(url, image_name, new_path, session, retry_count=3):
                 return True
             else:
                 logger.error(f"Failed to download image. Response: {response.status_code}, URL: {url}")
-        except Exception as exc:
+    except Exception as exc:
             logger.error(f"Error downloading or converting image {image_name} from {url}: {exc}")
 
-        retry_count -= 1
+        #retry_count -= 1
 
     return False
 # def imageDownload(url, image_name, new_path, session, retry_count=3):
