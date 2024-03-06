@@ -267,7 +267,7 @@ def analyze_data(data):
 def download_all_images(data, save_path):
     pool_size = analyze_data(data)
     session = requests.Session()
-    retries = Retry(total=5, backoff_factor=1, status_forcelist=[502, 503, 504])
+    retries = Retry(total=1, backoff_factor=1, status_forcelist=[502, 503, 504])
     adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=retries)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
@@ -325,8 +325,8 @@ def imageDownload(url, image_name, new_path, session, retry_count=3):
 
     fallback_formats = ['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']  # Expanded list of image formats
 
-    #while retry_count > 0:
-    try:
+    while retry_count > 0:
+        try:
             response = session.get(url, headers=headers, stream=True)
             if response.status_code == 200:
                 content_type = response.headers.get('content-type', '')
@@ -359,10 +359,10 @@ def imageDownload(url, image_name, new_path, session, retry_count=3):
                 return True
             else:
                 logger.error(f"Failed to download image. Response: {response.status_code}, URL: {url}")
-    except Exception as exc:
+        except Exception as exc:
             logger.error(f"Error downloading or converting image {image_name} from {url}: {exc}")
 
-        #retry_count -= 1
+        retry_count -= 1
 
     return False
 # def imageDownload(url, image_name, new_path, session, retry_count=3):
