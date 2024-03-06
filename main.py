@@ -9,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 import boto3
 import logging
 from openpyxl.utils import get_column_letter
+from requests.adapters import HTTPAdapter
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib3.util.retry import Retry
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -243,70 +246,229 @@ def prepare_images_for_download(results):
         raise Exception("No valid image URLs found in the results")
 
     return images_to_download
+import tldextract
+from collections import Counter
+def extract_domains_and_counts(data):
+    """Extract domains from URLs and count their occurrences."""
+    domains = [tldextract.extract(url).registered_domain for _, url in data]
+    domain_counts = Counter(domains)
+    print(f"Domain {domains} counts: {domain_counts}")
+    return domain_counts
 
+def analyze_data(data):
+    domain_counts = extract_domains_and_counts(data)
+    logger.info("Domain counts: %s", domain_counts)
+    unique_domains = len(domain_counts)
+    print(f"Unique Domain Len: {unique_domains}")
+    pool_size = min(500, max(10, unique_domains * 2))  # Adjust as needed
+    print(f"Pool size: {pool_size}")
+    return pool_size
 
 def download_all_images(data, save_path):
-    s = requests.Session()
-    #s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=200))
-    threads = []
-    for item in data:
-        logger.info(f"Downloading image: {item[1]}")
-        image_url = item[1].strip("[]'\"")  # Remove the brackets and quotes
-        input_sku = item[0]  # Grab the input SKU
-        thread = threading.Thread(target=imageDownload, args=(str(image_url), str(input_sku), save_path, s))
-        thread.start()
-        threads.append(thread)
-    for thread in threads:
-        thread.join()
-def imageDownload(url, image_name, new_path, session):
-    timeout = 120
+    pool_size = analyze_data(data)
+    session = requests.Session()
+    retries = Retry(total=5, backoff_factor=1, status_forcelist=[502, 503, 504])
+    adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=retries)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+
+    with ThreadPoolExecutor(max_workers=pool_size) as executor:
+        futures = [
+            executor.submit(imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
+            for item in data
+        ]
+        for future in as_completed(futures):
+            try:
+                # Retrieve the result to trigger any exceptions that occurred
+                future.result()
+            except Exception as exc:
+                logger.error(f'Task generated an exception: {exc}')
+# def download_all_images(data, save_path):
+#     s = requests.Session()
+#     #s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=200))
+#     threads = []
+#     for item in data:
+#         logger.info(f"Downloading image: {item[1]}")
+#         image_url = item[1].strip("[]'\"")  # Remove the brackets and quotes
+#         input_sku = item[0]  # Grab the input SKU
+#         thread = threading.Thread(target=imageDownload, args=(str(image_url), str(input_sku), save_path, s))
+#         thread.start()
+#         threads.append(thread)
+#     for thread in threads:
+#         thread.join()
+def build_headers(url):
+    domain_info = tldextract.extract(url)
+    domain = f"{domain_info.domain}.{domain_info.suffix}"
+    
     headers = {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
-        "accept-encoding": "gzip, deflate, br",
-        "accept-language": "en-US,en;q=0.9",
-        "upgrade-insecure-requests": "1",
-        "user-agent": "Mozilla/5.0"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "max-age=0",
+        "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        # "Referer": "Set this if needed based on your logic"
     }
+    if domain:
+        headers["Referer"] = f"https://{domain}/"
+        print(f"Headers: {headers['Referer']}")
+    # Additional dynamic header settings can go here.
+    # Example for Referer (if applicable):
+    # headers["Referer"] = f"https://{domain}/"
     
-    if ('/' in image_name) or ('\\' in image_name):
-        print("Invalid image name.")
-        return False
+    return headers
+def imageDownload(url, image_name, new_path, session, retry_count=3):
+    headers = build_headers(url)
     
-    try:
-        response = session.get(url, headers=headers, timeout=timeout, stream=True)
-        if not response.ok:
-            print(f"Failed to download image. Response: {response}")
-            return False
-        
-        content_type = response.headers['content-type']
-        image_format = content_type.split('/')[-1]  # Extracts format from content-type
-        
-        # Determine the file extension (default to .png for unrecognized formats)
-        file_extension = 'png' if image_format not in ['jpeg', 'png', 'gif', 'bmp', 'webp'] else image_format
-        
-        temp_image_path = os.path.join(new_path, f"{image_name}.{file_extension}")
-        
-        # Save the image temporarily in its original format
-        with open(temp_image_path, 'wb') as handle:
-            for block in response.iter_content(1024):
-                if not block:
-                    break
-                handle.write(block)
-        
-        # Convert and save the image as PNG
-        final_image_path = os.path.join(new_path, f"{image_name}.png")
-        with IMG.open(temp_image_path) as img:
-            img.convert("RGB").save(final_image_path, 'PNG')
-        
-        # Clean up the temporary file if it's different from the final format
-        if file_extension != 'png':
-            os.remove(temp_image_path)
-        
-        print(f"Image downloaded and converted to PNG: {final_image_path}")
-        return True
-    except Exception as exc:
-        print(f"Error downloading or converting image {image_name} from {url}: {exc}")
+    if '/' in image_name or '\\' in image_name:
+        logger.error("Invalid image name.")
         return False
+
+    fallback_formats = ['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']  # Expanded list of image formats
+
+    while retry_count > 0:
+        try:
+            response = session.get(url, headers=headers, stream=True)
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '')
+                file_extension = content_type.split('/')[-1] if 'image' in content_type else fallback_formats[0]
+
+                saved = False
+                for fmt in ([file_extension] + fallback_formats):
+                    temp_image_path = os.path.join(new_path, f"{image_name}.{fmt}")
+                    with open(temp_image_path, 'wb') as handle:
+                        for block in response.iter_content(1024):
+                            if not block:
+                                break
+                            handle.write(block)
+
+                    try:
+                        final_image_path = os.path.join(new_path, f"{image_name}.png")
+                        with IMG.open(temp_image_path) as img:
+                            img.convert("RGB").save(final_image_path, 'PNG')
+                        saved = True
+                        logger.info(f"Image downloaded and converted to PNG: {final_image_path}")
+                        break
+                    except IOError:
+                        os.remove(temp_image_path)
+
+                if not saved:
+                    logger.error(f"Failed to identify and convert image from URL: {url}")
+                    return False
+                
+                return True
+            else:
+                logger.error(f"Failed to download image. Response: {response.status_code}, URL: {url}")
+        except Exception as exc:
+            logger.error(f"Error downloading or converting image {image_name} from {url}: {exc}")
+
+        retry_count -= 1
+
+    return False
+# def imageDownload(url, image_name, new_path, session, retry_count=3):
+#     headers = build_headers(url)
+    
+#     if '/' in image_name or '\\' in image_name:
+#         logger.error("Invalid image name.")
+#         return False
+
+#     while retry_count > 0:
+#         try:
+#             response = session.get(url, headers=headers, stream=True)
+#             if response.status_code == 200:
+#                 content_type = response.headers.get('content-type', '')
+#                 # Determine the image format based on the content-type or default to 'png'
+#                 image_format = content_type.split('/')[-1] if 'image' in content_type else 'png'
+#                 file_extension = image_format if image_format in ['jpeg', 'png', 'gif', 'bmp', 'webp', 'avif'] else 'png'
+
+#                 temp_image_path = os.path.join(new_path, f"{image_name}.{file_extension}")
+
+#                 with open(temp_image_path, 'wb') as handle:
+#                     for block in response.iter_content(1024):
+#                         if not block:
+#                             break
+#                         handle.write(block)
+
+#                 final_image_path = os.path.join(new_path, f"{image_name}.png")
+#                 # Try to convert any image to PNG, regardless of its initial format
+#                 try:
+#                     with IMG.open(temp_image_path) as img:
+#                         img.convert("RGB").save(final_image_path, 'PNG')
+#                 except Exception as e:
+#                     logger.error(f"Could not process image {temp_image_path} as an image: {e}")
+#                     os.remove(temp_image_path)  # Remove the temp file if it's not a valid image
+#                     return False
+
+#                 if file_extension != 'png':
+#                     os.remove(temp_image_path)
+
+#                 logger.info(f"Image downloaded and converted to PNG: {final_image_path}")
+#                 return True
+#             else:
+#                 logger.error(f"Failed to download image. Response: {response.status_code} Url: {url}")
+#         except Exception as exc:
+#             logger.error(f"Error downloading or converting image {image_name} from {url}: {exc}")
+
+#         retry_count -= 1
+
+#     return False
+            
+# def imageDownload(url, image_name, new_path, session):
+#     timeout = 180
+#     headers = {
+#         "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
+#         "accept-encoding": "gzip, deflate, br",
+#         "accept-language": "en-US,en;q=0.9",
+#         "upgrade-insecure-requests": "1",
+#         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36"
+#     }
+    
+#     if ('/' in image_name) or ('\\' in image_name):
+#         print("Invalid image name.")
+#         return False
+    
+#     try:
+#         response = session.get(url, headers=headers, timeout=timeout, stream=True)
+#         if not response.ok:
+#             print(f"Failed to download image. Response: {response}")
+#             return False
+        
+#         content_type = response.headers['content-type']
+#         image_format = content_type.split('/')[-1]  # Extracts format from content-type
+        
+#         # Determine the file extension (default to .png for unrecognized formats)
+#         file_extension = 'png' if image_format not in ['jpeg', 'png', 'gif', 'bmp', 'webp'] else image_format
+        
+#         temp_image_path = os.path.join(new_path, f"{image_name}.{file_extension}")
+        
+#         # Save the image temporarily in its original format
+#         with open(temp_image_path, 'wb') as handle:
+#             for block in response.iter_content(1024):
+#                 if not block:
+#                     break
+#                 handle.write(block)
+        
+#         # Convert and save the image as PNG
+#         final_image_path = os.path.join(new_path, f"{image_name}.png")
+#         with IMG.open(temp_image_path) as img:
+#             img.convert("RGB").save(final_image_path, 'PNG')
+        
+#         # Clean up the temporary file if it's different from the final format
+#         if file_extension != 'png':
+#             os.remove(temp_image_path)
+        
+#         print(f"Image downloaded and converted to PNG: {final_image_path}")
+#         return True
+#     except Exception as exc:
+#         print(f"Error downloading or converting image {image_name} from {url}: {exc}")
+#         return False
 # def imageDownload(url, imageName, newpath, s):
 #     timeout = 120
 #     headers = {
@@ -416,13 +578,14 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
                 
             img.anchor = anchor
             ws.add_image(img)
-            wb.save(local_filename)
+            #wb.save(local_filename)
             logging.info(f'Image saved at {anchor}')
         else:
             failed_rows.append(row_number)
             logging.warning('Inserting image skipped due to verify_png_image_single failure.')   
     # Finalize changes to the workbook
     logging.info('Finished processing all images.')
+    wb.save(local_filename)
     return failed_rows 
 
 
