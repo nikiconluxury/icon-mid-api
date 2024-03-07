@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 logger.info("Informational message")
 logger.error("Error message")
 
-#from dotenv import load_dotenv
-#load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 def get_spaces_client():
     logger.info("Creating spaces client")
@@ -181,7 +181,7 @@ async def process_image_batch(payload: dict):
         provided_file_path = payload.get('filePath')
         send_to_email = payload.get('sendToEmail')
         preferred_image_method = payload.get('preferredImageMethod')
-        semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD'),300))  # Limit concurrent tasks to avoid overloading
+        semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
         loop = asyncio.get_running_loop()
         # Create a temporary directory to save downloaded images
         unique_id = str(uuid.uuid4())[:8]
