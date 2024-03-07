@@ -11,6 +11,10 @@ from openpyxl.utils import get_column_letter
 from requests.adapters import HTTPAdapter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib3.util.retry import Retry
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
+from base64 import b64encode
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,7 +36,7 @@ def get_spaces_client():
     logger.info("Spaces client created successfully")
     return client
 
-async def upload_file_to_space(file_src, save_as, is_public, content_type, meta=None):
+def upload_file_to_space(file_src, save_as, is_public, content_type, meta=None):
     spaces_client = get_spaces_client()
     space_name = 'iconluxurygroup-s3'  # Your space name
     print('Content Type')
@@ -61,9 +65,7 @@ async def upload_file_to_space(file_src, save_as, is_public, content_type, meta=
         return upload_url
 
 
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
-from base64 import b64encode
+
 def send_email(to_emails, subject, download_url, excel_file_path):
     # Encode the URL if necessary (example shown, adjust as needed)
     # from urllib.parse import quote
@@ -161,8 +163,10 @@ async def process_payload(payload: dict):
         print(clean_results)
         logger.info("clean_results: {}".format(clean_results))
         
-        await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
-
+        #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
+        d_complete_ = await download_all_images(clean_results, temp_images_dir)
+        if d_complete_:
+            logger.info("Images downloaded successfully ;)")
         local_filename = os.path.join(temp_excel_dir, provided_file_path.split('/')[-1])
         
         contenttype = os.path.splitext(local_filename)[1]
@@ -186,8 +190,8 @@ async def process_payload(payload: dict):
         is_public = True
         public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)
         logger.info("Sending email")
-        send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
-        
+        await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
+        #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         logger.info("Cleaning up temporary directories")
         await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
         
@@ -203,7 +207,7 @@ async def process_with_semaphore(row, semaphore):
         return await process_row(row)  # Assuming process_row is an async function you've defined elsewhere
 
 
-async def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
+def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
     # Load the workbook
     workbook = openpyxl.load_workbook(excel_file_path)
     
@@ -263,8 +267,8 @@ def analyze_data(data):
     print(f"Pool size: {pool_size}")
     return pool_size
 
-def download_all_images(data, save_path):
-    pool_size = analyze_data(data)
+async def download_all_images(data, save_path):
+    pool_size = analyze_data(data)  # Determine your pool size based on data analysis
     session = requests.Session()
     retries = Retry(total=1, backoff_factor=1, status_forcelist=[502, 503, 504])
     adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=retries)
@@ -272,14 +276,15 @@ def download_all_images(data, save_path):
     session.mount('https://', adapter)
 
     with ThreadPoolExecutor(max_workers=pool_size) as executor:
+        loop = asyncio.get_running_loop()  # Updated to use get_running_loop for current loop
         futures = [
-            executor.submit(imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
+            loop.run_in_executor(executor, imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
             for item in data
         ]
-        for future in as_completed(futures):
+        for future in asyncio.as_completed(futures):
             try:
-                # Retrieve the result to trigger any exceptions that occurred
-                future.result()
+                # Just await the future without calling result()
+                await future
             except Exception as exc:
                 logger.error(f'Task generated an exception: {exc}')
 # def download_all_images(data, save_path):
