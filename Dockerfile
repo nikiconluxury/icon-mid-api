@@ -6,7 +6,6 @@ WORKDIR /app
 
 # Copy only the specified directories and files into the container at /app
 COPY icon_image_lib/ icon_image_lib/
-COPY temp_files/ temp_files/
 COPY main.py main.py
 #COPY .env .env
 COPY requirements.txt .
