@@ -121,18 +121,21 @@ def send_email(to_emails, subject, download_url, excel_file_path,execution_time)
         print(e)
         #raise
         
-def send_error_email(to_emails, subject,error_message):
+def send_message_email(to_emails, subject,message):
+    message_with_breaks = message.replace("\n", "<br>")
+
     html_content = f"""
-    <html>
-    <body>
-    <div class="container">
-        <p>Ecountered an error while processing your request.</p>
-        <p>Error details: {error_message}</p>
-        <p>Beta:v1.1</p>
-    </div>
-    </body>
-    </html>
-    """
+<html>
+<body>
+<div class="container">
+    <!-- Use the modified message with <br> for line breaks -->
+    <p>Message details:<br>{message_with_breaks}</p>
+    <p>API Live View: <a href="http://167.172.18.77:5555/workers">Live Tasks</a></p>
+    <p>Beta:v1.9</p>
+</div>
+</body>
+</html>
+"""
     message = Mail(
         from_email='distrotool@iconluxurygroup.com',
         subject=subject,
@@ -187,6 +190,7 @@ async def process_image_batch(payload: dict):
         logger.info(f"Processing started for payload: {payload}")
         rows = payload.get('rowData', [])
         provided_file_path = payload.get('filePath')
+        
         send_to_email = payload.get('sendToEmail')
         preferred_image_method = payload.get('preferredImageMethod')
         semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
@@ -194,7 +198,12 @@ async def process_image_batch(payload: dict):
         # Create a temporary directory to save downloaded images
         unique_id = str(uuid.uuid4())[:8]
         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-            
+        file_name = provided_file_path.split('/')[-1]
+        local_filename = os.path.join(temp_excel_dir, file_name)
+        
+
+        await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}') 
+
         tasks = [process_with_semaphore(row, semaphore) for row in rows]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -212,7 +221,7 @@ async def process_image_batch(payload: dict):
         d_complete_ = await download_all_images(clean_results, temp_images_dir)
         if d_complete_:
             logger.info("Images downloaded successfully ;)")
-        local_filename = os.path.join(temp_excel_dir, provided_file_path.split('/')[-1])
+        
         
         contenttype = os.path.splitext(local_filename)[1]
         logger.info("Downloading Excel from web")
@@ -251,7 +260,7 @@ async def process_image_batch(payload: dict):
 
     except Exception as e:
         logger.exception("An unexpected error occurred during processing: %s", e)
-        await loop.run_in_executor(ThreadPoolExecutor(), send_error_email, send_to_email, 'An Error Occurred', str(e))
+        await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, 'An Error Occurred', f"An unexpected error occurred during processing.\nError: {str(e)}")
         return {"error": f"An unexpected error occurred during processing. Error: {e}"}
     
     
@@ -317,7 +326,7 @@ def prepare_images_for_download(results,send_to_email):
                         images_to_download.append((package.get('absoluteRowIndex'), url))
 
     if not images_to_download:
-        send_error_email(send_to_email,'No images found','No images found in the results')
+        send_message_email(send_to_email,'No images found','No images found in the results')
         #raise Exception("No valid image URLs found in the results")
 
 
