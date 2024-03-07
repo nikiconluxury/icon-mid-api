@@ -8,6 +8,6 @@ boto3
 sendgrid
 httpx
 tldextract
+aiohttp
+aiohttp_retry
 python-dotenv
-
-

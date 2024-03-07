@@ -48,35 +48,6 @@ async def poll_task_status(task_id, timeout=1000):
         logger.exception(f"Exception occurred while polling task {task_id} Exception: {e}")
         raise
 
-
-
-# async def process_row(row):
-#     try:
-#         print(f"Processing row: {row}")
-        
-#         dataset_split = [row.get('brandValue'), row.get('searchValue')]
-#         absolute_row_index = row.get('absoluteRowIndex')
-#         original_search_value = row.get('searchValue')
-#         create_response = await create_image_task(dataset_split)
-#         task_id = create_response.get('task_id')
-#         if task_id:
-#             print(f"Task ID received: {task_id}. Starting to poll for completion...")
-#             await asyncio.sleep(5)  # Wait for 5 seconds before polling, asynchronously
-#             try:
-#                 result = await asyncio.wait_for(poll_task_status(task_id), timeout=120)  # Wait for a maximum of 2 minutes
-#                 if result:
-#                     print(f"Task {task_id} completed with result: {result}")
-#                     return result
-                
-#             except asyncio.TimeoutError:
-#                 print(f"Polling timeout for task {task_id}. Task abandoned.")
-#                 return {"error": "Polling timeout. Task abandoned."}
-#         else:
-#             print("Failed to create task. No task ID received.")
-#             return {"error": "Failed to start task."}
-#     except Exception as e:
-#         print(f"An error occurred: {e}")
-#         return {"error": str(e)}
 async def process_row(row):
     try:
         logger.info(f"Processing row: {row}")

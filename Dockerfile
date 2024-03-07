@@ -18,7 +18,7 @@ COPY icon_image_lib/ icon_image_lib/
 COPY main.py .
 
 # Make port 8000 available to the world outside this container
-EXPOSE 8000
+EXPOSE 8080
 
 # Run main.py when the container launches
 CMD ["python", "main.py"]

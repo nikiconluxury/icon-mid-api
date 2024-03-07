@@ -4,9 +4,11 @@ from icon_image_lib.utility import process_row  # Assuming this is correctly imp
 from openpyxl import load_workbook
 from PIL import Image as IMG2
 from openpyxl.drawing.image import Image
-
+from openpyxl.styles import PatternFill
+import datetime
 import boto3
 import logging
+from io import BytesIO
 from openpyxl.utils import get_column_letter
 from requests.adapters import HTTPAdapter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -14,11 +16,14 @@ from urllib3.util.retry import Retry
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
 from base64 import b64encode
+import aiohttp
+from aiohttp import ClientTimeout
+from aiohttp_retry import RetryClient, ExponentialRetry
 
-
-logging.basicConfig(level=logging.INFO)
+#logging.basicConfig(level=logging.INFO)
+#logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
 # Example usage
 logger.info("Informational message")
 logger.error("Error message")
@@ -67,15 +72,17 @@ def upload_file_to_space(file_src, save_as, is_public, content_type, meta=None):
 
 
 
-def send_email(to_emails, subject, download_url, excel_file_path):
+def send_email(to_emails, subject, download_url, excel_file_path,execution_time):
     # Encode the URL if necessary (example shown, adjust as needed)
     # from urllib.parse import quote
     # download_url = quote(download_url, safe='')
+    execution_time_timedelta = datetime.timedelta(seconds=execution_time)
     html_content = f"""
 <html>
 <body>
 <div class="container">
     <p>Your file is ready for download.</p>
+    <p>Total Elapsed Time: {str(execution_time_timedelta)}</p>
     <a href="{download_url}" class="download-button">Download File</a>
 </div>
 </body>
@@ -171,6 +178,7 @@ app = FastAPI()
 
 
 async def process_image_batch(payload: dict):
+    start_time = time.time()
     # Your existing logic here
     # Include all steps from processing start to finish,
     # such as downloading images, writing images to Excel, etc.
@@ -194,12 +202,8 @@ async def process_image_batch(payload: dict):
             logger.error("Error occurred during image processing.")
             return {"error": "An error occurred during processing."}
         print(results)
-        logger.info("Downloading images")
-
-        
-        
-        
-        
+        logger.info("Downloading images")     
+             
         clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results,send_to_email)
         print(clean_results)
         logger.info("clean_results: {}".format(clean_results))
@@ -223,22 +227,26 @@ async def process_image_batch(payload: dict):
         failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
         print(f"failed rows: {failed_rows}")
         if failed_rows != []:
-            await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+            fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
             logger.error(f"Failed to write images for rows: {failed_rows}")
+            logger.error(f"Failed rows added to excel: {fail_rows_written})")
             
         logger.info("Uploading file to space")
         #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
         is_public = True
         public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)  
+        end_time = time.time()
+        execution_time = end_time - start_time
         #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
         if os.listdir(temp_images_dir) !=[]:
             logger.info("Sending email")
-            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
+            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename,execution_time)
         #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         logger.info("Cleaning up temporary directories")
         await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
         
         logger.info("Processing completed successfully")
+        
         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
     except Exception as e:
@@ -253,87 +261,22 @@ def process_payload(background_tasks: BackgroundTasks, payload: dict):
     background_tasks.add_task(process_image_batch, payload)
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
-
-
-
-# @app.post("/process-image-batch/")
-# async def process_payload(payload: dict):
-#     logger.info("Received request to process image batch")
-#     try:
-#         logger.info(f"Processing started for payload: {payload}")
-#         rows = payload.get('rowData', [])
-#         provided_file_path = payload.get('filePath')
-#         send_to_email = payload.get('sendToEmail')
-#         preferred_image_method = payload.get('preferredImageMethod')
-#         semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
-#         loop = asyncio.get_running_loop()
-#         # Create a temporary directory to save downloaded images
-#         unique_id = str(uuid.uuid4())[:8]
-#         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-            
-#         tasks = [process_with_semaphore(row, semaphore) for row in rows]
-#         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-#         if any(isinstance(result, Exception) for result in results):
-#             logger.error("Error occurred during image processing.")
-#             return {"error": "An error occurred during processing."}
-#         print(results)
-#         logger.info("Downloading images")
-
-        
-        
-        
-        
-#         clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results)
-#         print(clean_results)
-#         logger.info("clean_results: {}".format(clean_results))
-        
-#         #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
-#         d_complete_ = await download_all_images(clean_results, temp_images_dir)
-#         if d_complete_:
-#             logger.info("Images downloaded successfully ;)")
-#         local_filename = os.path.join(temp_excel_dir, provided_file_path.split('/')[-1])
-        
-#         contenttype = os.path.splitext(local_filename)[1]
-#         logger.info("Downloading Excel from web")
-#         response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
-#         if response.status_code != 200:
-#             logger.error(f"Failed to download file: {response.status_code}")
-#             return {"error": "Failed to download the provided file."}
-#         with open(local_filename, "wb") as file:
-#             file.write(response.content)
-        
-#         logger.info("Writing images to Excel")
-#         failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
-#         print(f"failed rows: {failed_rows}")
-#         if failed_rows != []:
-#             await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
-#             logger.error(f"Failed to write images for rows: {failed_rows}")
-            
-#         logger.info("Uploading file to space")
-#         #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
-#         is_public = True
-#         public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)
-#         logger.info("Sending email")
-#         await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
-#         #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
-#         logger.info("Cleaning up temporary directories")
-#         await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
-        
-#         logger.info("Processing completed successfully")
-#         return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
-
-#     except Exception as e:
-#         logger.exception("An unexpected error occurred during processing.",e)
-#         return {"error": f"An unexpected error occurred during processing. Error: {e}"}
-
 async def process_with_semaphore(row, semaphore):
     async with semaphore:
         return await process_row(row)  # Assuming process_row is an async function you've defined elsewhere
-
+def highlight_cell(excel_file, cell_reference):
+    workbook = openpyxl.load_workbook(excel_file)
+    sheet = workbook.active
+    
+    # Since we are directly using the column letter, there's no need to find it.
+    # Adjust for 1-based indexing, assuming `row_letter` is now an actual index number.
+    sheet[cell_reference].fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    
+    workbook.save(excel_file)
 
 def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
     # Load the workbook
+    added_rows = [] 
     workbook = openpyxl.load_workbook(excel_file_path)
     
     # Select the active worksheet or specify by name
@@ -351,10 +294,13 @@ def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
             # Write the URL to column A of the failed row
             # Adjust the cell reference as needed (row index might need +1 depending on header row)
             cell_reference = f"{get_column_letter(1)}{row}"  # Column A, row number
-            worksheet[cell_reference] = url
-    
+            worksheet[cell_reference] = f'=IMAGE("{url}")'
+            highlight_cell(excel_file_path,cell_reference)
+            added_rows.append(row)
+            
     # Save the workbook
     workbook.save(excel_file_path)
+    return added_rows
 def prepare_images_for_download(results,send_to_email):
     images_to_download = []
 
@@ -382,7 +328,6 @@ def extract_domains_and_counts(data):
     """Extract domains from URLs and count their occurrences."""
     domains = [tldextract.extract(url).registered_domain for _, url in data]
     domain_counts = Counter(domains)
-    print(f"Domain {domains} counts: {domain_counts}")
     return domain_counts
 
 def analyze_data(data):
@@ -394,43 +339,74 @@ def analyze_data(data):
     print(f"Pool size: {pool_size}")
     return pool_size
 
-async def download_all_images(data, save_path):
-    pool_size = analyze_data(data)  # Determine your pool size based on data analysis
-    session = requests.Session()
-    retries = Retry(total=1, backoff_factor=1, status_forcelist=[502, 503, 504])
-    adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=retries)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
+# async def download_all_images(data, save_path):
+#     pool_size = analyze_data(data)  # Determine your pool size based on data analysis
+#     logger.info(f"Initializing session with pool size: {pool_size}")
+#     session = requests.Session()
+#     retries = Retry(total=1, backoff_factor=1, status_forcelist=[502, 503, 504])
+#     adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=retries)
+#     session.mount('http://', adapter)
+#     session.mount('https://', adapter)
+#     logger.info(f"Creating ThreadPoolExecutor with max_workers: {pool_size*2}")
+#     with ThreadPoolExecutor(max_workers=(pool_size*2)) as executor:
+#         loop = asyncio.get_running_loop()  # Updated to use get_running_loop for current loop
+#         logger.info(f"Scheduling download for item: {item[1].strip("[]'\"")}")
+#         futures = [
+#             loop.run_in_executor(executor, imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
+#             for item in data
+#         ]
+#         # Wrap each future in asyncio.wait_for to enforce a timeout
+#         timeout_futures = [asyncio.wait_for(future, timeout=180) for future in futures]  # 180 seconds = 3 minutes
 
-    with ThreadPoolExecutor(max_workers=(pool_size*2)) as executor:
-        loop = asyncio.get_running_loop()  # Updated to use get_running_loop for current loop
-        futures = [
-            loop.run_in_executor(executor, imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
-            for item in data
-        ]
-        # Wrap each future in asyncio.wait_for to enforce a timeout
-        timeout_futures = [asyncio.wait_for(future, timeout=180) for future in futures]  # 180 seconds = 3 minutes
+#         for future in asyncio.as_completed(timeout_futures):
+#             try:
+#                 logger.info("Awaiting future completion...")
+#                 await future
+#             except asyncio.TimeoutError:
+#                 future.cancel()  # Attempt to cancel the future
+#                 logger.error('Download task exceeded the 3-minute timeout and was aborted.')
 
-        for future in asyncio.as_completed(timeout_futures):
-            try:
-                await future  # This now respects the 3-minute timeout
-            except asyncio.TimeoutError:
-                logger.error('Download task exceeded the 3-minute timeout and was aborted.')
-            except Exception as exc:
-                logger.error(f'Task generated an exception: {exc}')
-# def download_all_images(data, save_path):
-#     s = requests.Session()
-#     #s.mount('https://', HTTPAdapter(pool_connections=1, pool_maxsize=200))
-#     threads = []
-#     for item in data:
-#         logger.info(f"Downloading image: {item[1]}")
-#         image_url = item[1].strip("[]'\"")  # Remove the brackets and quotes
-#         input_sku = item[0]  # Grab the input SKU
-#         thread = threading.Thread(target=imageDownload, args=(str(image_url), str(input_sku), save_path, s))
-#         thread.start()
-#         threads.append(thread)
-#     for thread in threads:
-#         thread.join()
+#             except Exception as exc:
+#                 logger.error(f'Task generated an exception: {exc}')
+# async def download_all_images(data, save_path):
+#     # Assuming analyze_data is a function that returns an integer
+#     pool_size = analyze_data(data)  # Placeholder for your actual data analysis function
+#     logger.info(f"Initializing session with pool size: {pool_size}")
+    
+#     session = requests.Session()
+#     retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+#     adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size, max_retries=retries)
+#     session.mount('http://', adapter)
+#     session.mount('https://', adapter)
+
+#     logger.info(f"Session initialized with retries and backoff strategy. Pool size: {pool_size}")
+
+#     logger.info(f"Creating ThreadPoolExecutor with max_workers: {pool_size * 2}")
+#     with ThreadPoolExecutor(max_workers=(pool_size * 2)) as executor:
+#         loop = asyncio.get_running_loop()
+        
+#         futures = []
+#         for item in data:
+#             item_url = item[1].strip("[]'\"")
+#             logger.info(f"Scheduling download for item URL: {item_url}, ID: {item[0]}")
+#             future = loop.run_in_executor(executor, imageDownload, item_url, str(item[0]), save_path, session)
+#             futures.append(future)
+        
+#         logger.info("All download tasks have been scheduled.")
+        
+#         # Wrap each future in asyncio.wait_for to enforce a timeout
+#         timeout_futures = [asyncio.wait_for(future, timeout=180) for future in futures]  # 180 seconds = 3 minutes
+        
+#         for future in asyncio.as_completed(timeout_futures):
+#             try:
+#                 result = await future
+#                 logger.info(f"Download and processing completed with result: {result}")
+#             except asyncio.TimeoutError:
+#                 future.cancel()  # Attempt to cancel the future
+#                 logger.error('Download task exceeded the 3-minute timeout and was aborted.')
+#             except Exception as exc:
+#                 logger.error(f'Task generated an exception: {exc}', exc_info=True)
+
 def build_headers(url):
     domain_info = tldextract.extract(url)
     domain = f"{domain_info.domain}.{domain_info.suffix}"
@@ -463,47 +439,125 @@ def try_convert_to_png(image_path, new_path, image_name):
     except IOError as e:
         logger.error(f"Failed to convert image to PNG: {e}")
         return False
+async def image_download(semaphore, url, image_name, save_path, session, fallback_formats=None):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    async with semaphore:
+        if fallback_formats is None:
+            fallback_formats = ['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']
+        
+        logger.info(f"Initiating download for URL: {url} Img: {image_name}")
+        try:
+            async with session.get(url,headers=headers) as response:
+                logger.info(f"Requesting URL: {url} with stream=True")
+                #response = session.get(url, stream=True)
+                logger.info(f"Received response: {response.status } for URL: {url}")
 
-def imageDownload(url, image_name, new_path, session, fallback_formats=['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']):
-    logger.info(f"Starting download for: {url}")
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = session.get(url, headers=headers, stream=True)
-
-    if response.status_code == 200:
-        temp_image_path = os.path.join(new_path, f"{image_name}.temp")  # Temporary file
-        with open(temp_image_path, 'wb') as handle:
-            for block in response.iter_content(1024):
-                if not block:
-                    break
-                handle.write(block)
-        logger.info(f"Image downloaded: {temp_image_path}")
-
-        if try_convert_to_png(temp_image_path, new_path, image_name):
-            logger.info(f"Direct conversion to PNG successful for: {image_name}")
-            return True
-
-        logger.info(f"Direct conversion to PNG failed, attempting fallback formats for: {image_name}")
-        for fmt in fallback_formats:
-            formatted_temp_path = f"{temp_image_path}.{fmt}"
-            logger.info(f"Attempting conversion with fallback format {fmt} for: {image_name}")
-            try:
-                os.rename(temp_image_path, formatted_temp_path)
-                if try_convert_to_png(formatted_temp_path, new_path, image_name):
-                    logger.info(f"Conversion to PNG successful with fallback format {fmt} for: {image_name}")
-                    return True
+                if response.status == 200:
+                    logger.info(f"Processing content from URL: {url}")
+                    data = await response.read()
+                    image_data = BytesIO(data)
+                    try:
+                        logger.info(f"Attempting to open image stream and save as PNG for {image_name}")
+                        with IMG2.open(image_data) as img:
+                            final_image_path = os.path.join(save_path, f"{image_name}.png")
+                            img.save(final_image_path)
+                            logger.info(f"Successfully saved: {final_image_path}")
+                            return True
+                    except UnidentifiedImageError as e:
+                        logger.error(f"Image file type unidentified, trying fallback formats for {image_name}: {e}")
+                        for fmt in fallback_formats:
+                            image_data.seek(0)  # Reset stream position
+                            try:
+                                logger.info(f"Trying to save image with fallback format {fmt} for {image_name}")
+                                with IMG2.open(image_data) as img:
+                                    final_image_path = os.path.join(save_path, f"{image_name}.{fmt}")
+                                    img.save(final_image_path)
+                                    logger.info(f"Successfully saved with fallback format {fmt}: {final_image_path}")
+                                    return True
+                            except Exception as fallback_exc:
+                                logger.error(f"Failed with fallback format {fmt} for {image_name}: {fallback_exc}")
                 else:
-                    os.rename(formatted_temp_path, temp_image_path)
-            except Exception as e:
-                logger.error(f"Failed during conversion attempt for format {fmt}: {e}")
-                if os.path.exists(formatted_temp_path):
-                    os.remove(formatted_temp_path)  # Cleanup if format-specific file was created
+                    logger.error(f"Download failed with status code {response.status} for URL: {url}")
+        except TimeoutError:
+            # Handle the timeout specifically
+            logger.error(f"Timeout occurred while downloading {url} Image: {image_name}")
+            return False
+        except Exception as exc:
+            logger.error(f"Exception occurred during download or processing for URL: {url}: {exc}", exc_info=True)
+        return False
+async def download_all_images(data, save_path):
+    pool_size = analyze_data(data)  # Placeholder for your actual data analysis function
+    logger.info(f"Setting up session with pool size: {pool_size}")
+    
+    # Setup async session with retry policy
+    timeout = ClientTimeout(total=60)
+    retry_options = ExponentialRetry(attempts=3, start_timeout=3)
+    async with RetryClient(raise_for_status=False, retry_options=retry_options, timeout=timeout) as session:
+        semaphore = asyncio.Semaphore(pool_size)
+        
+        logger.info("Scheduling image downloads")
+        tasks = [
+            image_download(semaphore, str(item[1]), str(item[0]), save_path, session)
+            for item in data
+        ]
 
-        if os.path.exists(temp_image_path):
-            os.remove(temp_image_path)
-        logger.error(f"All format conversion attempts failed for image: {url}")
-    else:
-        logger.error(f"Failed to download image. Response: {response.status_code}, URL: {url}")
-    return False
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        logger.info("Processing download results")
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Download task generated an exception: {result}")
+            else:
+                logger.info(f"Download task completed with result: {result}")
+
+        logger.info("All image download tasks completed.")
+# def imageDownload(url, image_name, new_path, session, fallback_formats=['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']):
+#     logger.info(f"Starting download for: {url}")
+#     headers = {"User-Agent": "Mozilla/5.0"}
+#     logger.info(f"Sending request to download image: {url}")
+#     response = session.get(url, headers=headers, stream=True)
+#     logger.info(f"Response received, status code: {response.status_code}")
+#     if response.status_code == 200:
+#         temp_image_path = os.path.join(new_path, f"{image_name}.temp")  # Temporary file
+#         logger.info(f"Writing to temporary image path: {temp_image_path}")
+#         with open(temp_image_path, 'wb') as handle:
+#             for block in response.iter_content(1024):
+#                 if not block:
+#                     break
+#                 handle.write(block)
+#         logger.info(f"Image downloaded: {temp_image_path}")
+
+#         if try_convert_to_png(temp_image_path, new_path, image_name):
+#             logger.info(f"Direct conversion to PNG successful for: {image_name}")
+#             return True
+
+#         logger.info(f"Direct conversion to PNG failed, attempting fallback formats for: {image_name}")
+#         for fmt in fallback_formats:
+#             formatted_temp_path = f"{temp_image_path}.{fmt}"
+#             logger.info(f"Attempting conversion with fallback format {fmt} for: {image_name}")
+#             try:
+#                 os.rename(temp_image_path, formatted_temp_path)
+#                 if try_convert_to_png(formatted_temp_path, new_path, image_name):
+#                     logger.info(f"Conversion to PNG successful with fallback format {fmt} for: {image_name}")
+#                     return True
+#                 else:
+#                     os.rename(formatted_temp_path, temp_image_path)
+#             except Exception as e:
+#                 logger.error(f"Failed during conversion attempt for format {fmt}: {e}")
+#                 if os.path.exists(formatted_temp_path):
+#                     logger.info(f"Cleanup temporary files for: {image_name}")
+#                     os.remove(formatted_temp_path)  # Cleanup if format-specific file was created
+
+#         if os.path.exists(temp_image_path):
+#             os.remove(temp_image_path)
+#         logger.error(f"All format conversion attempts failed for image: {url}")
+#     else:
+#         logger.error(f"Failed to download image. Response: {response.status_code}, URL: {url}")
+#     return False
 
 def verify_png_image_single(image_path):
     try:
@@ -598,5 +652,6 @@ def write_excel_image(local_filename, temp_dir, preferred_image_method):
 
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
+    print(os.environ)
     #uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
-    uvicorn.run("main:app", port=8000, host='0.0.0.0')
+    uvicorn.run("main:app", port=8080, host='0.0.0.0')
