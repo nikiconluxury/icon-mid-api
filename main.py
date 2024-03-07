@@ -61,7 +61,7 @@ def upload_file_to_space(file_src, save_as, is_public, content_type, meta=None):
     print(f"File uploaded successfully to {space_name}/{save_as}")
     # Generate and return the public URL if the file is public
     if is_public:
-        upload_url = f"{os.getenv('SPACES_ENDPOINT')}/{space_name}/{save_as}"
+        upload_url = f"{str(os.getenv('SPACES_ENDPOINT'))}/{space_name}/{save_as}"
         print(f"Public URL: {upload_url}")
         return upload_url
 
