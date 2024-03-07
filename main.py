@@ -408,10 +408,14 @@ async def download_all_images(data, save_path):
             loop.run_in_executor(executor, imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
             for item in data
         ]
-        for future in asyncio.as_completed(futures):
+        # Wrap each future in asyncio.wait_for to enforce a timeout
+        timeout_futures = [asyncio.wait_for(future, timeout=180) for future in futures]  # 180 seconds = 3 minutes
+
+        for future in asyncio.as_completed(timeout_futures):
             try:
-                # Just await the future without calling result()
-                await future
+                await future  # This now respects the 3-minute timeout
+            except asyncio.TimeoutError:
+                logger.error('Download task exceeded the 3-minute timeout and was aborted.')
             except Exception as exc:
                 logger.error(f'Task generated an exception: {exc}')
 # def download_all_images(data, save_path):
