@@ -402,7 +402,7 @@ async def download_all_images(data, save_path):
     session.mount('http://', adapter)
     session.mount('https://', adapter)
 
-    with ThreadPoolExecutor(max_workers=pool_size) as executor:
+    with ThreadPoolExecutor(max_workers=(pool_size*2)) as executor:
         loop = asyncio.get_running_loop()  # Updated to use get_running_loop for current loop
         futures = [
             loop.run_in_executor(executor, imageDownload, item[1].strip("[]'\""), str(item[0]), save_path, session)
