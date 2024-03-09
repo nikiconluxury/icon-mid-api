@@ -72,22 +72,45 @@ def upload_file_to_space(file_src, save_as, is_public, content_type, meta=None):
 
 
 
-def send_email(to_emails, subject, download_url, excel_file_path,execution_time):
+def send_email(to_emails, subject, download_url, excel_file_path,execution_time,message="Total Rows:\nFilename:\nBatch ID:\nLocation:\nUploaded File:"):
     # Encode the URL if necessary (example shown, adjust as needed)
     # from urllib.parse import quote
     # download_url = quote(download_url, safe='')
     execution_time_timedelta = datetime.timedelta(seconds=execution_time)
+
+
+
+    message_with_breaks = message.replace("\n", "<br>")
+
     html_content = f"""
 <html>
 <body>
 <div class="container">
     <p>Your file is ready for download.</p>
     <p>Total Elapsed Time: {str(execution_time_timedelta)}</p>
+    <p>Message details:<br>{message_with_breaks}</p>
     <a href="{download_url}" class="download-button">Download File</a>
+    <p>API Live View: <a href="http://167.172.18.77:5555/workers">Live Tasks</a></p>
+    <p>Beta:v1.9</p>
 </div>
 </body>
 </html>
 """
+
+
+
+
+#     html_content = f"""
+# <html>
+# <body>
+# <div class="container">
+#     <p>Your file is ready for download.</p>
+#     <p>Total Elapsed Time: {str(execution_time_timedelta)}</p>
+#     <a href="{download_url}" class="download-button">Download File</a>
+# </div>
+# </body>
+# </html>
+# """
     message = Mail(
         from_email='distrotool@iconluxurygroup.com',
         subject=subject,
@@ -249,7 +272,7 @@ async def process_image_batch(payload: dict):
         #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
         if os.listdir(temp_images_dir) !=[]:
             logger.info("Sending email")
-            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename,execution_time)
+            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename,execution_time,f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
         #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         logger.info("Cleaning up temporary directories")
         await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
