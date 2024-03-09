@@ -272,7 +272,7 @@ async def process_image_batch(payload: dict):
         #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
         if os.listdir(temp_images_dir) !=[]:
             logger.info("Sending email")
-            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, f'Started {file_name}', public_url, local_filename,execution_time,f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, f'Started {file_name}', public_url, local_filename,execution_time,'')
         #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         logger.info("Cleaning up temporary directories")
         await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
@@ -283,7 +283,7 @@ async def process_image_batch(payload: dict):
 
     except Exception as e:
         logger.exception("An unexpected error occurred during processing: %s", e)
-        await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, 'An Error Occurred', f"An unexpected error occurred during processing.\nError: {str(e)}")
+        await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f"An unexpected error occurred during processing.\nError: {str(e)}")
         return {"error": f"An unexpected error occurred during processing. Error: {e}"}
     
     
@@ -349,7 +349,7 @@ def prepare_images_for_download(results,send_to_email):
                         images_to_download.append((package.get('absoluteRowIndex'), url))
 
     if not images_to_download:
-        send_message_email(send_to_email,'No images found','No images found in the results')
+        send_message_email(send_to_email,f'Started {file_name}','No images found in the results')
         #raise Exception("No valid image URLs found in the results")
 
 
