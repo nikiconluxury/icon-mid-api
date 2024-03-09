@@ -272,7 +272,7 @@ async def process_image_batch(payload: dict):
         #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
         if os.listdir(temp_images_dir) !=[]:
             logger.info("Sending email")
-            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename,execution_time,f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+            await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, f'Started {file_name}', public_url, local_filename,execution_time,f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
         #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
         logger.info("Cleaning up temporary directories")
         await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
