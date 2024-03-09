@@ -237,6 +237,8 @@ async def process_image_batch(payload: dict):
         logger.info("Downloading images")     
              
         clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results,send_to_email)
+        if clean_results == []:
+            send_message_email(send_to_email,f'Started {file_name}','No images found in the results')
         print(clean_results)
         logger.info("clean_results: {}".format(clean_results))
         
@@ -348,8 +350,8 @@ def prepare_images_for_download(results,send_to_email):
                     if url:  # Ensure the URL is not None or empty.
                         images_to_download.append((package.get('absoluteRowIndex'), url))
 
-    if not images_to_download:
-        send_message_email(send_to_email,f'Started {file_name}','No images found in the results')
+    #if not images_to_download:
+        #send_message_email(send_to_email,f'Started {file_name}','No images found in the results')
         #raise Exception("No valid image URLs found in the results")
 
 
