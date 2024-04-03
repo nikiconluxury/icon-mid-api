@@ -12,10 +12,10 @@ test:
 	python -m pytest -vv --cov=mylib --cov=tasks --cov=main  test_*.py
 
 build:
-	docker-compose build
+	docker build . -t myapp
 
 up:
-	docker-compose up -d
+	docker run myapp
 
 down:
 	docker-compose down

@@ -3,6 +3,7 @@ import asyncio, os,threading,uuid,requests,openpyxl,uvicorn,shutil,mimetypes,tim
 from icon_image_lib.utility import process_row  # Assuming this is correctly implemented
 from openpyxl import load_workbook
 from PIL import Image as IMG2
+from PIL import UnidentifiedImageError
 from openpyxl.drawing.image import Image
 from openpyxl.styles import PatternFill
 import datetime

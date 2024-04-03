@@ -9,5 +9,5 @@ sendgrid
 httpx
 tldextract
 aiohttp
-aiohttp_retry
+aiohttp-retry==2.8.3
 python-dotenv
