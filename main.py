@@ -239,7 +239,7 @@ async def process_image_batch(payload: dict):
              
         clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results,send_to_email)
         if clean_results == []:
-            send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided')
+            send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided\nIf api is disabled this reponse will be sent')
         print(clean_results)
         logger.info("clean_results: {}".format(clean_results))
         
