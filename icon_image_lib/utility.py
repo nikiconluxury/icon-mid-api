@@ -24,7 +24,7 @@ async def create_image_task(dataset_split):
         raise
 
 
-async def poll_task_status(task_id, timeout=1000):
+async def poll_task_status(task_id, timeout=5000):
     try:
         logger.info(f"Starting to poll task status for task_id: {task_id}")
         async with httpx.AsyncClient(timeout=None) as client:
@@ -62,7 +62,7 @@ async def process_row(row):
             logger.info(f"Task ID {task_id} received, starting to poll for completion...")
             await asyncio.sleep(int(os.environ.get('POLL_AFTER'))) # Wait for 3 minutes before polling, asynchronously
 
-            result = await asyncio.wait_for(poll_task_status(task_id), timeout=1000)  # Example timeout
+            result = await asyncio.wait_for(poll_task_status(task_id), timeout=5000)  # Example timeout
 
             if result:
                 logger.info(f"Task {task_id} completed with result: {result}")
