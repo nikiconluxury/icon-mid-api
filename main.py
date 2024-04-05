@@ -20,7 +20,6 @@ from base64 import b64encode
 import aiohttp
 from aiohttp import ClientTimeout
 from aiohttp_retry import RetryClient, ExponentialRetry
-
 #logging.basicConfig(level=logging.INFO)
 #logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -531,7 +530,8 @@ async def download_all_images(data, save_path):
     # Setup async session with retry policy
     timeout = ClientTimeout(total=60)
     retry_options = ExponentialRetry(attempts=3, start_timeout=3)
-    async with RetryClient(raise_for_status=False, retry_options=retry_options, timeout=timeout) as session:
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with RetryClient(raise_for_status=False, retry_options=retry_options, timeout=timeout,connector=connector) as session:
         semaphore = asyncio.Semaphore(pool_size)
         
         logger.info("Scheduling image downloads")
