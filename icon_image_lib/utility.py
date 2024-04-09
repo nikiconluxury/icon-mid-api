@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
     pool_name="mypool2",
-    pool_size=4,
+    pool_size=500,
     host=os.getenv('DBHOST'),
     database='defaultdb',
     user='doadmin',
