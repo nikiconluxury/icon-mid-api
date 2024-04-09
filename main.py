@@ -598,20 +598,21 @@ async def download_all_images(data, save_path):
 
         logger.info("Scheduling image downloads")
         tasks = [
-            image_download(semaphore, str(item[1]), str(item[0]), save_path, session)
-            for item in data
+            image_download(semaphore, str(item[1]), str(item[0]), save_path, session, index)
+            for index, item in enumerate(data, start=1)
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         logger.info("Processing download results")
-        for result in results:
+        for index, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Download task generated an exception: {result}")
+                failed_downloads.append((data[index][1], data[index][0]))  # Append the image URL and row ID
             else:
                 logger.info(f"Download task completed with result: {result}")
-                if result[0] is False:
-                    failed_downloads.append((result[1], result[2]))  # Append the image URL and row ID
+                if result is False:
+                    failed_downloads.append((data[index][1], data[index][0]))  # Append the image URL and row ID
 
     return failed_downloads
 # def imageDownload(url, image_name, new_path, session, fallback_formats=['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']):
