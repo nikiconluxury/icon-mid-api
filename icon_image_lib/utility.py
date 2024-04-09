@@ -130,7 +130,7 @@ async def process_row(row,uniqueid):
         #connection = mysql.connector.connect(**conn_params)
         connection = global_connection_pool.get_connection()
         cursor = connection.cursor()
-        sql_query = f"INSERT INTO utb_ImageScraperResult (EntryID,FileID) values ({absolute_row_index},'{uniqueid}')"
+        sql_query = f"INSERT INTO utb_ImageScraperResult (EntryID,FileID,SearchValue) values ({absolute_row_index},'{uniqueid}', '{original_search_value}')"
         print(sql_query)
         cursor.execute(str(sql_query))
         connection.commit()

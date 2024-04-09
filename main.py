@@ -245,10 +245,7 @@ async def process_image_batch(payload: dict):
         logger.info("clean_results: {}".format(clean_results))
         
         #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
-        d_complete_ = await download_all_images(clean_results, temp_images_dir)
-        if d_complete_:
-            logger.info("Images downloaded successfully ;)")
-        
+        failed_img_urls = await download_all_images(clean_results, temp_images_dir)
         
         contenttype = os.path.splitext(local_filename)[1]
         logger.info("Downloading Excel from web")
@@ -262,8 +259,10 @@ async def process_image_batch(payload: dict):
         logger.info("Writing images to Excel")
         failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
         print(f"failed rows: {failed_rows}")
-        if failed_rows != []:
-            fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+        #if failed_rows != []:
+        if failed_img_urls:
+            #fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+            fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_downloads_to_excel, local_filename, clean_results,failed_img_urls)
             logger.error(f"Failed to write images for rows: {failed_rows}")
             logger.error(f"Failed rows added to excel: {fail_rows_written})")
             
@@ -303,13 +302,28 @@ async def process_with_semaphore(row, semaphore,fileid):
 def highlight_cell(excel_file, cell_reference):
     workbook = openpyxl.load_workbook(excel_file)
     sheet = workbook.active
-    
-    # Since we are directly using the column letter, there's no need to find it.
-    # Adjust for 1-based indexing, assuming `row_letter` is now an actual index number.
     sheet[cell_reference].fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-    
     workbook.save(excel_file)
+def write_failed_downloads_to_excel(failed_downloads, excel_file):
+    if failed_downloads:
+        workbook = openpyxl.load_workbook(excel_file)
 
+        # Select the active worksheet or specify by name
+        worksheet = workbook.active  # or workbook.get_sheet_by_name('SheetName')
+        # Iterate over the failed rows
+        for row in failed_downloads:
+            url = row[0]
+            row_id = row[1]
+            if url:
+                # Write the URL to column A of the failed row
+                # Adjust the cell reference as needed (row index might need +1 depending on header row)
+                cell_reference = f"{get_column_letter(1)}{row_id}"  # Column A, row number
+                worksheet[cell_reference] = str(url)
+                highlight_cell(excel_file, cell_reference)
+        workbook.save(excel_file)
+        logger.info(f"Failed downloads written to Excel file: {excel_file}")
+    else:
+        logger.info("No failed downloads to write to Excel.")
 def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
     # Load the workbook
     added_rows = [] 
@@ -330,12 +344,12 @@ def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
             # Write the URL to column A of the failed row
             # Adjust the cell reference as needed (row index might need +1 depending on header row)
             cell_reference = f"{get_column_letter(1)}{row}"  # Column A, row number
-            worksheet[cell_reference] = f'=IMAGE("{url}")'
+            worksheet[cell_reference] = str(url)
             highlight_cell(excel_file_path,cell_reference)
             added_rows.append(row)
             
-    # Save the workbook
-    workbook.save(excel_file_path)
+        # Save the workbook
+        workbook.save(excel_file_path)
     return added_rows
 def prepare_images_for_downloadV2(results):
     images_to_download = []
@@ -538,17 +552,49 @@ async def image_download(semaphore, url, image_name, save_path, session, fallbac
         except Exception as exc:
             logger.error(f"Exception occurred during download or processing for URL: {url}: {exc}", exc_info=True)
         return False
+# async def download_all_images(data, save_path):
+#     failed_downloads = []
+#     pool_size = analyze_data(data)  # Placeholder for your actual data analysis function
+#     logger.info(f"Setting up session with pool size: {pool_size}")
+#
+#     # Setup async session with retry policy
+#     timeout = ClientTimeout(total=60)
+#     retry_options = ExponentialRetry(attempts=3, start_timeout=3)
+#     connector = aiohttp.TCPConnector(ssl=False)
+#     async with RetryClient(raise_for_status=False, retry_options=retry_options, timeout=timeout,connector=connector) as session:
+#         semaphore = asyncio.Semaphore(pool_size)
+#
+#         logger.info("Scheduling image downloads")
+#         tasks = [
+#             image_download(semaphore, str(item[1]), str(item[0]), save_path, session)
+#             for item in data
+#         ]
+#
+#         results = await asyncio.gather(*tasks, return_exceptions=True)
+#
+#         logger.info("Processing download results")
+#         for result in results:
+#             if isinstance(result, Exception):
+#                 logger.error(f"Download task generated an exception: {result}")
+#             else:
+#                 logger.info(f"Download task completed with result: {result}")
+
+
+
 async def download_all_images(data, save_path):
+    failed_downloads = []
     pool_size = analyze_data(data)  # Placeholder for your actual data analysis function
+
     logger.info(f"Setting up session with pool size: {pool_size}")
-    
+
     # Setup async session with retry policy
     timeout = ClientTimeout(total=60)
     retry_options = ExponentialRetry(attempts=3, start_timeout=3)
     connector = aiohttp.TCPConnector(ssl=False)
-    async with RetryClient(raise_for_status=False, retry_options=retry_options, timeout=timeout,connector=connector) as session:
+
+    async with RetryClient(raise_for_status=False, retry_options=retry_options, timeout=timeout, connector=connector) as session:
         semaphore = asyncio.Semaphore(pool_size)
-        
+
         logger.info("Scheduling image downloads")
         tasks = [
             image_download(semaphore, str(item[1]), str(item[0]), save_path, session)
@@ -556,15 +602,17 @@ async def download_all_images(data, save_path):
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         logger.info("Processing download results")
-        for result in results:
+        for index, result in enumerate(results, start=1):
             if isinstance(result, Exception):
                 logger.error(f"Download task generated an exception: {result}")
             else:
                 logger.info(f"Download task completed with result: {result}")
+                if result is False:
+                    failed_downloads.append((data[index-1][1], index))  # Append the image URL and row number
 
-        logger.info("All image download tasks completed.")
+    return failed_downloads
 # def imageDownload(url, image_name, new_path, session, fallback_formats=['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']):
 #     logger.info(f"Starting download for: {url}")
 #     headers = {"User-Agent": "Mozilla/5.0"}
