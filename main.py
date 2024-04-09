@@ -605,13 +605,13 @@ async def download_all_images(data, save_path):
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         logger.info("Processing download results")
-        for index, result in enumerate(results, start=1):
+        for result in results:
             if isinstance(result, Exception):
                 logger.error(f"Download task generated an exception: {result}")
             else:
                 logger.info(f"Download task completed with result: {result}")
-                if result is False:
-                    failed_downloads.append((data[index-1][1], index))  # Append the image URL and row number
+                if result[0] is False:
+                    failed_downloads.append((result[1], result[2]))  # Append the image URL and row ID
 
     return failed_downloads
 # def imageDownload(url, image_name, new_path, session, fallback_formats=['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']):
