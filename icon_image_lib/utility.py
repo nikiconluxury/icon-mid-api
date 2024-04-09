@@ -14,6 +14,17 @@ from asyncio.exceptions import TimeoutError
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
+    pool_name="mypool2",
+    pool_size=4,
+    host=os.getenv('DBHOST'),
+    database='defaultdb',
+    user='doadmin',
+    password=os.getenv('DBPASS'),
+    port=25060
+)
+
 async def create_image_task(dataset_split):
     try:
         print(dataset_split)
@@ -106,14 +117,7 @@ async def wait_for_completion(result_id, db_pool):
         print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
         return None, None, None  # Or any other placeholder values you prefer
 async def process_row(row,uniqueid):
-
-    conn_params = {
-        'host': os.getenv('DBHOST'),
-        'database': 'defaultdb',
-        'user': 'doadmin',
-        'passwd': os.getenv('DBPASS'),
-        'port': 25060,  # This is the default MySQL port. Only change it if your setup is different.
-    }
+    global global_connection_pool
     try:
         logger.info(f"Processing row: {row}")
 
@@ -123,12 +127,8 @@ async def process_row(row,uniqueid):
         dataset_split = [str(row.get('brandValue')), str(row.get('searchValue')),str(absolute_row_index),str(uniqueid)]
         create_response = await create_image_task(dataset_split)
         task_id = create_response.get('task_id')
-
-        pool = pooling.MySQLConnectionPool(pool_name="mypool",
-                                           pool_size=5,
-                                           **conn_params)
         #connection = mysql.connector.connect(**conn_params)
-        connection = pool.get_connection()
+        connection = global_connection_pool.get_connection()
         cursor = connection.cursor()
         sql_query = f"INSERT INTO utb_ImageScraperResult (EntryID,FileID) values ({absolute_row_index},'{uniqueid}')"
         print(sql_query)
@@ -143,7 +143,7 @@ async def process_row(row,uniqueid):
             #await asyncio.sleep(int(os.environ.get('POLL_AFTER'))) # Wait for 3 minutes before polling, asynchronously
 
             #result = await asyncio.wait_for(poll_task_status(task_id), timeout=10000)  # Example timeout
-            result = await wait_for_completion(result_id,pool)
+            result = await wait_for_completion(result_id,global_connection_pool)
 
             if result:
                 logger.info(f"Task {task_id} completed with result: {result}")
