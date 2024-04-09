@@ -361,9 +361,12 @@ def prepare_images_for_downloadV2(results):
         if package.get('result', {}).get('url'):
             url = package.get('result').get('url')
             print(url)
-            if url:  # Ensure the URL is not None or empty.
-                print(package.get('absoluteRowIndex'))
-                images_to_download.append((package.get('absoluteRowIndex'), url))
+            # Ensure the URL is not None or empty.
+            if url:
+                if url != 'None found in this filter':
+                    print(package.get('absoluteRowIndex'))
+                    images_to_download.append((package.get('absoluteRowIndex'), url))
+
     return images_to_download
 
 def prepare_images_for_download(results,send_to_email):
