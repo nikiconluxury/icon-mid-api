@@ -14,7 +14,7 @@ from asyncio.exceptions import TimeoutError
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+from mysql.connector.errors import PoolError
 global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
     pool_name="mypool2",
     pool_size=32,
@@ -83,6 +83,35 @@ def get_task_status(task_id,pool):
     finally:
         conn.close()
     return result
+
+
+async def wait_for_completion(result_id, db_pool, queue):
+    async def poll_database():
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor() as pool:
+            while True:
+                try:
+                    result = await loop.run_in_executor(pool, get_task_status, result_id, db_pool)
+                    if result and result['completeTime']:
+                        print(f"Process completed for ResultID {result_id}.")
+                        return result['EntryID'], result['ImageUrl'], result['ImageDesc']
+                    print("Waiting for process to complete...")
+                    await asyncio.sleep(5)  # Async sleep
+                except PoolError as e:
+                    if "pool exhausted" in str(e):
+                        print(f"Pool exhausted for ResultID {result_id}. Queueing for the next available worker.")
+                        await queue.put((result_id, db_pool, queue))  # Queue the item for the next available worker
+                        return None, None, None
+                    else:
+                        raise e
+
+    try:
+        # Attempt to complete the task within 10 minutes
+        return await asyncio.wait_for(poll_database(), timeout=1800)
+    except TimeoutError:
+        # Handle the case where the task does not complete within 10 minutes
+        print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
+        return None, None, None  # Or any other placeholder values you prefer
 # async def wait_for_completion(result_id,db_pool):
 #     """
 #     Asynchronously polls the database for the completeTime of the specified result_id.
@@ -97,25 +126,25 @@ def get_task_status(task_id,pool):
 #                 return result['EntryID'], result['ImageUrl'], result['ImageDesc']
 #             print("Waiting for process to complete...")
 #             await asyncio.sleep(5)  # Async sleep
-async def wait_for_completion(result_id, db_pool):
-    async def poll_database():
-        loop = asyncio.get_running_loop()
-        with ThreadPoolExecutor() as pool:
-            while True:
-                result = await loop.run_in_executor(pool, get_task_status, result_id,db_pool)
-                if result and result['completeTime']:
-                    print(f"Process completed for ResultID {result_id}.")
-                    return result['EntryID'], result['ImageUrl'], result['ImageDesc']
-                print("Waiting for process to complete...")
-                await asyncio.sleep(5)  # Async sleep
-
-    try:
-        # Attempt to complete the task within 10 minutes
-        return await asyncio.wait_for(poll_database(), timeout=1800)
-    except TimeoutError:
-        # Handle the case where the task does not complete within 10 minutes
-        print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
-        return None, None, None  # Or any other placeholder values you prefer
+# async def wait_for_completion2(result_id, db_pool):
+#     async def poll_database():
+#         loop = asyncio.get_running_loop()
+#         with ThreadPoolExecutor() as pool:
+#             while True:
+#                 result = await loop.run_in_executor(pool, get_task_status, result_id,db_pool)
+#                 if result and result['completeTime']:
+#                     print(f"Process completed for ResultID {result_id}.")
+#                     return result['EntryID'], result['ImageUrl'], result['ImageDesc']
+#                 print("Waiting for process to complete...")
+#                 await asyncio.sleep(5)  # Async sleep
+#
+#     try:
+#         # Attempt to complete the task within 10 minutes
+#         return await asyncio.wait_for(poll_database(), timeout=1800)
+#     except TimeoutError:
+#         # Handle the case where the task does not complete within 10 minutes
+#         print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
+#         return None, None, None  # Or any other placeholder values you prefer
 async def process_row(row,uniqueid):
     global global_connection_pool
     try:
@@ -138,25 +167,40 @@ async def process_row(row,uniqueid):
         cursor.close()
         connection.close()
 
+        # if task_id:
+        #     logger.info(f"Task ID {task_id} received, starting to poll for completion...")
+        #     #await asyncio.sleep(int(os.environ.get('POLL_AFTER'))) # Wait for 3 minutes before polling, asynchronously
+        #
+        #     #result = await asyncio.wait_for(poll_task_status(task_id), timeout=10000)  # Example timeout
+        #     result = await wait_for_completion(result_id,global_connection_pool)
+        #
+        #     if result:
+        #         logger.info(f"Task {task_id} completed with result: {result}")
+        #         entry_id, image_url, image_desc = result
+        #         result_f = {"url":image_url}
+        #         return {
+        #             "result": result_f,
+        #             "absoluteRowIndex": absolute_row_index,
+        #             "originalSearchValue": original_search_value
+        #         }
+        # else:
+        #     logger.warning("Failed to create task. No task ID received.")
         if task_id:
             logger.info(f"Task ID {task_id} received, starting to poll for completion...")
-            #await asyncio.sleep(int(os.environ.get('POLL_AFTER'))) # Wait for 3 minutes before polling, asynchronously
-
-            #result = await asyncio.wait_for(poll_task_status(task_id), timeout=10000)  # Example timeout
-            result = await wait_for_completion(result_id,global_connection_pool)
-
+            queue = asyncio.Queue()
+            result = await wait_for_completion(result_id, global_connection_pool, queue)
             if result:
                 logger.info(f"Task {task_id} completed with result: {result}")
                 entry_id, image_url, image_desc = result
-                result_f = {"url":image_url}
+                result_f = {"url": image_url}
                 return {
                     "result": result_f,
                     "absoluteRowIndex": absolute_row_index,
                     "originalSearchValue": original_search_value
                 }
-        else:
-            logger.warning("Failed to create task. No task ID received.")
-            return {
+            else:
+                logger.warning("Failed to create task. No task ID received.")
+                return {
                 "error": "Failed to start task.",
                 "absoluteRowIndex": absolute_row_index,
                 "originalSearchValue": original_search_value
