@@ -100,7 +100,7 @@ async def wait_for_completion(result_id, db_pool):
 
     try:
         # Attempt to complete the task within 10 minutes
-        return await asyncio.wait_for(poll_database(), timeout=600)
+        return await asyncio.wait_for(poll_database(), timeout=1800)
     except TimeoutError:
         # Handle the case where the task does not complete within 10 minutes
         print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
