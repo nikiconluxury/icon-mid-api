@@ -208,26 +208,27 @@ async def process_image_batch(payload: dict):
     # Your existing logic here
     # Include all steps from processing start to finish,
     # such as downloading images, writing images to Excel, etc.
+
+    logger.info(f"Processing started for payload: {payload}")
+    rows = payload.get('rowData', [])
+    provided_file_path = payload.get('filePath')
     logger.info("Received request to process image batch")
+    file_name = provided_file_path.split('/')[-1]
+    send_to_email = payload.get('sendToEmail', 'nik@iconluxurygroup.com')
+    preferred_image_method = payload.get('preferredImageMethod', 'append')
+    semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
+    loop = asyncio.get_running_loop()
     try:
-        logger.info(f"Processing started for payload: {payload}")
-        rows = payload.get('rowData', [])
-        provided_file_path = payload.get('filePath')
-        
-        send_to_email = payload.get('sendToEmail')
-        preferred_image_method = payload.get('preferredImageMethod')
-        semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
-        loop = asyncio.get_running_loop()
+
         # Create a temporary directory to save downloaded images
         unique_id = str(uuid.uuid4())[:8]
         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-        file_name = provided_file_path.split('/')[-1]
         local_filename = os.path.join(temp_excel_dir, file_name)
         
 
         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}') 
 
-        tasks = [process_with_semaphore(row, semaphore) for row in rows]
+        tasks = [process_with_semaphore(row, semaphore,unique_id) for row in rows]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         if any(isinstance(result, Exception) for result in results):
@@ -236,7 +237,8 @@ async def process_image_batch(payload: dict):
         print(results)
         logger.info("Downloading images")     
              
-        clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download, results,send_to_email)
+        #clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results,send_to_email)
+        clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results)
         if clean_results == []:
             send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided\nIf api is disabled this reponse will be sent')
         print(clean_results)
@@ -295,9 +297,9 @@ def process_payload(background_tasks: BackgroundTasks, payload: dict):
     background_tasks.add_task(process_image_batch, payload)
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
-async def process_with_semaphore(row, semaphore):
+async def process_with_semaphore(row, semaphore,fileid):
     async with semaphore:
-        return await process_row(row)  # Assuming process_row is an async function you've defined elsewhere
+        return await process_row(row,fileid)  # Assuming process_row is an async function you've defined elsewhere
 def highlight_cell(excel_file, cell_reference):
     workbook = openpyxl.load_workbook(excel_file)
     sheet = workbook.active
@@ -335,12 +337,25 @@ def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
     # Save the workbook
     workbook.save(excel_file_path)
     return added_rows
+def prepare_images_for_downloadV2(results):
+    images_to_download = []
+
+    for package in results:
+        print(package)
+        if package.get('result', {}).get('url'):
+            url = package.get('result').get('url')
+            print(url)
+            if url:  # Ensure the URL is not None or empty.
+                print(package.get('absoluteRowIndex'))
+                images_to_download.append((package.get('absoluteRowIndex'), url))
+    return images_to_download
+
 def prepare_images_for_download(results,send_to_email):
     images_to_download = []
 
     for package in results:
         # Ensure the 'result' key is available and its 'status' is 'Completed'.
-        if package.get('result', {}).get('status') == 'Completed':
+        if package.get('result', {}).get('url') == 'Completed':
             # Iterate over each 'result' entry if it exists and is a list.
             for result_entry in package.get('result', {}).get('result', []):
                 # Check if the entry is 'Completed' and contains a 'result' key with a URL.
@@ -639,7 +654,7 @@ def resize_image(image_path):
     except Exception as e:
         logging.error(f"Error resizing image: {e}, for image: {image_path}")
         return False               
-def write_excel_image(local_filename, temp_dir, preferred_image_method):
+def write_excel_image(local_filename, temp_dir,preferred_image_method):
     failed_rows = []
     # Load the workbook and select the active worksheet
     wb = load_workbook(local_filename)
