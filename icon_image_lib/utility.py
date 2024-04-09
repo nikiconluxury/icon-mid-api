@@ -5,10 +5,12 @@ import time,os
 from httpx import ConnectTimeout
 import logging
 import mysql.connector
-#from dotenv import load_dotenv
-#load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
+from mysql.connector import pooling
 
 from concurrent.futures import ThreadPoolExecutor
+from asyncio.exceptions import TimeoutError
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,11 +54,12 @@ async def poll_task_status(task_id, timeout=5000):
         logger.exception(f"Exception occurred while polling task {task_id} Exception: {e}")
         raise
 
-def get_task_status(task_id,db_config):
+def get_task_status(task_id,pool):
     """
     Synchronously checks the task status from the database.
     """
-    conn = mysql.connector.connect(**db_config)
+    conn = pool.get_connection()
+    #conn = mysql.connector.connect(**db_config)
     try:
         with conn.cursor(dictionary=True) as cursor:
             query = """
@@ -69,21 +72,39 @@ def get_task_status(task_id,db_config):
     finally:
         conn.close()
     return result
-async def wait_for_completion(result_id,db_config):
-    """
-    Asynchronously polls the database for the completeTime of the specified result_id.
-    Uses a ThreadPoolExecutor to run synchronous DB operations without blocking the event loop.
-    """
-    loop = asyncio.get_running_loop()
-    with ThreadPoolExecutor() as pool:
-        while True:
-            result = await loop.run_in_executor(pool, get_task_status, result_id,db_config)
-            if result and result['completeTime']:
-                print(f"Process completed for ResultID {result_id}.")
-                return result['EntryID'], result['ImageUrl'], result['ImageDesc']
-            print("Waiting for process to complete...")
-            await asyncio.sleep(5)  # Async sleep
+# async def wait_for_completion(result_id,db_pool):
+#     """
+#     Asynchronously polls the database for the completeTime of the specified result_id.
+#     Uses a ThreadPoolExecutor to run synchronous DB operations without blocking the event loop.
+#     """
+#     loop = asyncio.get_running_loop()
+#     with ThreadPoolExecutor() as pool:
+#         while True:
+#             result = await loop.run_in_executor(pool, get_task_status, result_id,db_pool)
+#             if result and result['completeTime']:
+#                 print(f"Process completed for ResultID {result_id}.")
+#                 return result['EntryID'], result['ImageUrl'], result['ImageDesc']
+#             print("Waiting for process to complete...")
+#             await asyncio.sleep(5)  # Async sleep
+async def wait_for_completion(result_id, db_pool):
+    async def poll_database():
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor() as pool:
+            while True:
+                result = await loop.run_in_executor(pool, get_task_status, result_id,db_pool)
+                if result and result['completeTime']:
+                    print(f"Process completed for ResultID {result_id}.")
+                    return result['EntryID'], result['ImageUrl'], result['ImageDesc']
+                print("Waiting for process to complete...")
+                await asyncio.sleep(5)  # Async sleep
 
+    try:
+        # Attempt to complete the task within 10 minutes
+        return await asyncio.wait_for(poll_database(), timeout=600)
+    except TimeoutError:
+        # Handle the case where the task does not complete within 10 minutes
+        print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
+        return None, None, None  # Or any other placeholder values you prefer
 async def process_row(row,uniqueid):
 
     conn_params = {
@@ -103,7 +124,11 @@ async def process_row(row,uniqueid):
         create_response = await create_image_task(dataset_split)
         task_id = create_response.get('task_id')
 
-        connection = mysql.connector.connect(**conn_params)
+        pool = pooling.MySQLConnectionPool(pool_name="mypool",
+                                           pool_size=20,
+                                           **conn_params)
+        #connection = mysql.connector.connect(**conn_params)
+        connection = pool.get_connection()
         cursor = connection.cursor()
         sql_query = f"INSERT INTO utb_ImageScraperResult (EntryID,FileID) values ({absolute_row_index},'{uniqueid}')"
         print(sql_query)
@@ -118,7 +143,7 @@ async def process_row(row,uniqueid):
             #await asyncio.sleep(int(os.environ.get('POLL_AFTER'))) # Wait for 3 minutes before polling, asynchronously
 
             #result = await asyncio.wait_for(poll_task_status(task_id), timeout=10000)  # Example timeout
-            result = await wait_for_completion(result_id,conn_params)
+            result = await wait_for_completion(result_id,pool)
 
             if result:
                 logger.info(f"Task {task_id} completed with result: {result}")
