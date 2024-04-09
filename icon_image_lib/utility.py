@@ -125,7 +125,7 @@ async def process_row(row,uniqueid):
         task_id = create_response.get('task_id')
 
         pool = pooling.MySQLConnectionPool(pool_name="mypool",
-                                           pool_size=20,
+                                           pool_size=5,
                                            **conn_params)
         #connection = mysql.connector.connect(**conn_params)
         connection = pool.get_connection()
