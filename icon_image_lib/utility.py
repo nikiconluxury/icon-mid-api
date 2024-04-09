@@ -84,6 +84,15 @@ def get_task_status(task_id,pool):
         conn.close()
     return result
 
+async def process_queued_item(queue, result_id):
+    while True:
+        item = await queue.get()
+        if item[0] == result_id:
+            entry_id, image_url, image_desc = await wait_for_completion(result_id, item[1], queue)
+            return entry_id, image_url, image_desc
+        else:
+            # If the item is not the one we're waiting for, put it back in the queue
+            await queue.put(item)
 
 async def wait_for_completion(result_id, db_pool, queue):
     async def poll_database():
@@ -100,8 +109,8 @@ async def wait_for_completion(result_id, db_pool, queue):
                 except PoolError as e:
                     if "pool exhausted" in str(e):
                         print(f"Pool exhausted for ResultID {result_id}. Queueing for the next available worker.")
-                        await queue.put((result_id, db_pool, queue))  # Queue the item for the next available worker
-                        return None, None, None
+                        await queue.put((result_id, db_pool))  # Queue the item for the next available worker
+                        return await process_queued_item(queue, result_id)  # Process the queued item
                     else:
                         raise e
 
@@ -112,6 +121,8 @@ async def wait_for_completion(result_id, db_pool, queue):
         # Handle the case where the task does not complete within 10 minutes
         print(f"Process did not complete within 10 minutes for ResultID {result_id}. Assuming it broke.")
         return None, None, None  # Or any other placeholder values you prefer
+
+
 # async def wait_for_completion(result_id,db_pool):
 #     """
 #     Asynchronously polls the database for the completeTime of the specified result_id.
@@ -188,10 +199,12 @@ async def process_row(row,uniqueid):
         if task_id:
             logger.info(f"Task ID {task_id} received, starting to poll for completion...")
             queue = asyncio.Queue()
-            result = await wait_for_completion(result_id, global_connection_pool, queue)
-            if result:
-                logger.info(f"Task {task_id} completed with result: {result}")
-                entry_id, image_url, image_desc = result
+
+            entry_id, image_url, image_desc = await wait_for_completion(result_id, global_connection_pool, queue)
+
+            if entry_id is not None and image_url is not None and image_desc is not None:
+                logger.info(
+                    f"Task {task_id} completed with result: (entry_id={entry_id}, image_url={image_url}, image_desc={image_desc})")
                 result_f = {"url": image_url}
                 return {
                     "result": result_f,
@@ -199,8 +212,15 @@ async def process_row(row,uniqueid):
                     "originalSearchValue": original_search_value
                 }
             else:
-                logger.warning("Failed to create task. No task ID received.")
+                logger.warning(f"Task {task_id} did not complete successfully.")
                 return {
+                    "error": "Task did not complete successfully.",
+                    "absoluteRowIndex": absolute_row_index,
+                    "originalSearchValue": original_search_value
+                }
+        else:
+            logger.warning("Failed to create task. No task ID received.")
+            return {
                 "error": "Failed to start task.",
                 "absoluteRowIndex": absolute_row_index,
                 "originalSearchValue": original_search_value
