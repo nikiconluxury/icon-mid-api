@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 logger.info("Informational message")
 logger.error("Error message")
 
-from dotenv import load_dotenv
-load_dotenv()
+#from dotenv import load_dotenv
+#load_dotenv()
 
 def get_spaces_client():
     logger.info("Creating spaces client")
