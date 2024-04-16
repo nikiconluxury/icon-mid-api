@@ -4,9 +4,9 @@ import httpx
 import time,os
 from httpx import ConnectTimeout
 import logging
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 
-load_dotenv()
+#load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
