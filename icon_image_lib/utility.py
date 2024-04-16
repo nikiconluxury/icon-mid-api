@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from mysql.connector.errors import PoolError
 global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
-    pool_name="mypool2",
+    pool_name="mypool3",
     pool_size=32,
     host=os.getenv('DBHOST'),
     database='defaultdb',
