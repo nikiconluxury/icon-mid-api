@@ -12,3 +12,4 @@ aiohttp
 aiohttp-retry==2.8.3
 python-dotenv
 mysql-connector-python==8.3.0
+pyodbc
