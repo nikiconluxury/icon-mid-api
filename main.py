@@ -199,7 +199,9 @@ async def cleanup_temp_dirs(directories):
         await loop.run_in_executor(None, lambda dp=dir_path: shutil.rmtree(dp, ignore_errors=True))
 from sqlalchemy import create_engine
 global conn
-conn = "DRIVER={ODBC Driver 17 for SQL Server};Server=35.172.243.170;Database=luxurymarket_p4;Uid=luxurysitescraper;Pwd=Ftu5675FDG54hjhiuu$;"
+
+pwd_str = "Pwd={str(os.environ.get('MSSQLS_PWD')};"
+conn = "DRIVER={ODBC Driver 17 for SQL Server};Server=35.172.243.170;Database=luxurymarket_p4;Uid=luxurysitescraper;" + pwd_str
 global engine
 engine = create_engine("mssql+pyodbc:///?odbc_connect=%s" % conn)
 app = FastAPI()
