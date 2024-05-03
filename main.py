@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 # Example usage
 logger.info("Informational message")
 logger.error("Error message")
-
+import pyodbc
 from dotenv import load_dotenv
+import pandas as pd
 load_dotenv()
 
 def get_spaces_client():
@@ -196,9 +197,11 @@ async def cleanup_temp_dirs(directories):
     loop = asyncio.get_running_loop()  # Get the current loop directly
     for dir_path in directories:
         await loop.run_in_executor(None, lambda dp=dir_path: shutil.rmtree(dp, ignore_errors=True))
-
-
-
+from sqlalchemy import create_engine
+global conn
+conn = "DRIVER={ODBC Driver 17 for SQL Server};Server=35.172.243.170;Database=luxurymarket_p4;Uid=luxurysitescraper;Pwd=Ftu5675FDG54hjhiuu$;"
+global engine
+engine = create_engine("mssql+pyodbc:///?odbc_connect=%s" % conn)
 app = FastAPI()
 def insert_file_db (file_name,file_source):
     connection = pyodbc.connect(conn)
@@ -215,7 +218,32 @@ def insert_file_db (file_name,file_source):
     connection.close()
 
     return file_id
+def get_records_to_search(file_id,engine):
+    sql_query = f"Select EntryID, ProductModel as SearchString from utb_ImageScraperRecords where FileID = {file_id} and Step1 is null UNION ALL Select EntryID, ProductModel + ' '  + ProductBrand as SearchString from utb_ImageScraperRecords where FileID = {file_id} and Step1 is null Order by 1"
+    print(sql_query)
+    df = pd.read_sql_query(sql_query, con=engine)
+    return df
+def load_excel_from_url(url,file_id):
+    try:
+        # Load the Excel file into a pandas DataFrame
+        df = pd.read_excel(url)
+        # Reset the index without naming it
+        df = df.reset_index()
 
+        # Rename the 'index' column to 'ExcelRowID'
+        df = df.rename(columns={'index': 'ExcelRowID'})
+        df = df.rename(columns={'SKU': 'ProductModel'})
+        df = df.rename(columns={'Brand': 'ProductBrand'})
+
+        df.insert(0, 'FileID', file_id)
+        ###JUST FOR NOW DROP PICTURE COL
+        df = df.drop('Picture', axis=1)
+        df.to_sql(name='utb_ImageScraperRecords', con=engine, index=False, if_exists='append')
+        return df
+    except Exception as e:
+        # If an error occurs, print the error message
+        print(f"An error occurred: {e}")
+        return None
 
 async def process_image_batch(payload: dict):
     start_time = time.time()
@@ -232,8 +260,10 @@ async def process_image_batch(payload: dict):
     preferred_image_method = payload.get('preferredImageMethod', 'append')
     file_id_db = insert_file_db(file_name, provided_file_path)
     print(file_id_db)
-
-
+    load_excel_from_url(provided_file_path, file_id_db)
+    search_df = get_records_to_search(file_id_db, engine)
+    print(search_df)
+    
     # semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
     # loop = asyncio.get_running_loop()
     # try:
@@ -775,5 +805,5 @@ def write_excel_image(local_filename, temp_dir,preferred_image_method):
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
     print(os.environ)
-    #uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
-    uvicorn.run("main:app", port=8080, host='0.0.0.0')
+    uvicorn.run("main:app", port=8080, host='0.0.0.0', reload=True)
+    #uvicorn.run("main:app", port=8080, host='0.0.0.0')
