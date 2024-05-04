@@ -18,7 +18,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
 from base64 import b64encode
 import aiohttp
-from aiohttp import ClientTimeout
+#from aiohttp import ClientTimeout
 from aiohttp_retry import RetryClient, ExponentialRetry
 #logging.basicConfig(level=logging.INFO)
 #logger = logging.getLogger(__name__)
@@ -199,8 +199,9 @@ async def cleanup_temp_dirs(directories):
         await loop.run_in_executor(None, lambda dp=dir_path: shutil.rmtree(dp, ignore_errors=True))
 from sqlalchemy import create_engine
 global conn
+pwd_value = str(os.environ.get('MSSQLS_PWD'))
+pwd_str =f"Pwd={pwd_value};"
 
-pwd_str = "Pwd={str(os.environ.get('MSSQLS_PWD')};"
 conn = "DRIVER={ODBC Driver 17 for SQL Server};Server=35.172.243.170;Database=luxurymarket_p4;Uid=luxurysitescraper;" + pwd_str
 global engine
 engine = create_engine("mssql+pyodbc:///?odbc_connect=%s" % conn)
@@ -225,27 +226,77 @@ def get_records_to_search(file_id,engine):
     print(sql_query)
     df = pd.read_sql_query(sql_query, con=engine)
     return df
-def load_excel_from_url(url,file_id):
-    try:
-        # Load the Excel file into a pandas DataFrame
-        df = pd.read_excel(url)
-        # Reset the index without naming it
-        df = df.reset_index()
 
-        # Rename the 'index' column to 'ExcelRowID'
-        df = df.rename(columns={'index': 'ExcelRowID'})
-        df = df.rename(columns={'SKU': 'ProductModel'})
-        df = df.rename(columns={'Brand': 'ProductBrand'})
+def load_payload_db(rows, file_id):
+    # Create DataFrame from list of dictionaries (rows)
+    df = pd.DataFrame(rows)
 
-        df.insert(0, 'FileID', file_id)
-        ###JUST FOR NOW DROP PICTURE COL
-        df = df.drop('Picture', axis=1)
-        df.to_sql(name='utb_ImageScraperRecords', con=engine, index=False, if_exists='append')
-        return df
-    except Exception as e:
-        # If an error occurs, print the error message
-        print(f"An error occurred: {e}")
-        return None
+    # Rename columns
+    df = df.rename(columns={
+        'absoluteRowIndex': 'ExcelRowID',  # Renaming 'index' to 'ExcelRowID'
+        'searchValue': 'ProductModel',  # Renaming 'SKU' to 'ProductModel'
+        'brandValue': 'ProductBrand'  # Renaming 'Brand' to 'ProductBrand'
+    })
+
+    # Insert new column 'FileID' at the beginning with all values set to file_id
+    df.insert(0, 'FileID', file_id)
+    df = df.drop(columns=['imageValue'], axis=1)
+    print(df)
+    # Load DataFrame into SQL database
+    df.to_sql(name='utb_ImageScraperRecords', con=engine, index=False, if_exists='append')
+
+    return df
+
+
+
+def search_row(self,search_string, endpoint):
+        search_url = f"{endpoint}?query={search_string}"
+        print(search_url)
+        try:
+            response = requests.get(search_url, timeout=60)
+            print(response.status_code)
+            if response.status_code != 200 or response.json().get('body') is None:
+                print('trying again 1')
+                self.remove_endpoint_mysql(endpoint)
+                n_endpoint = self.get_endpoint_mysql()
+                return self.search_row(search_string, n_endpoint)  # Add return here
+            else:
+                response_json = response.json()
+                result = response_json.get('body', None)
+                if result:
+                    unpacked_html = self.unpack_content(result)
+                    parsed_data = GP(unpacked_html)
+                    if parsed_data is None:
+                        print('trying again 2')
+                        self.remove_endpoint_mysql(endpoint)
+                        n_endpoint = self.get_endpoint_mysql()
+                        return self.search_row(search_string, n_endpoint)  # Add return here
+                    if parsed_data[0][0] == 'No start_tag or end_tag':
+                        print('trying again 3')
+                        self.remove_endpoint_mysql(endpoint)
+                        n_endpoint = self.get_endpoint_mysql()
+                        return self.search_row(search_string, n_endpoint)
+                    else:
+                        print('parsed data!')
+                        image_url = parsed_data[0]
+                        image_desc = parsed_data[1]
+                        image_source = parsed_data[2]
+
+                        print(
+                            f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
+                        if image_url and image_desc and image_source:
+                            return image_url, image_desc, image_source
+                        else:
+                            print('trying again 4')
+                            self.remove_endpoint_mysql(endpoint)
+                            n_endpoint = self.get_endpoint_mysql()
+                            return self.search_row(search_string, n_endpoint)
+        except requests.RequestException as e:
+            print('trying again 5')
+            self.remove_endpoint_mysql(endpoint)
+            n_endpoint = self.get_endpoint_mysql()
+            print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
+            return self.search_row(search_string, n_endpoint)
 
 async def process_image_batch(payload: dict):
     start_time = time.time()
@@ -262,50 +313,53 @@ async def process_image_batch(payload: dict):
     preferred_image_method = payload.get('preferredImageMethod', 'append')
     file_id_db = insert_file_db(file_name, provided_file_path)
     print(file_id_db)
-    load_excel_from_url(provided_file_path, file_id_db)
-    search_df = get_records_to_search(file_id_db, engine)
-    print(search_df)
+    load_payload_db(rows, file_id_db)
+    #search_df = get_records_to_search(file_id_db, engine)
+    #print(search_df)
     
-    # semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
-    # loop = asyncio.get_running_loop()
-    # try:
-    #
+    semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
+    loop = asyncio.get_running_loop()
+    try:
     #     # Create a temporary directory to save downloaded images
-    #     unique_id = str(uuid.uuid4())[:8]
-    #     temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-    #     local_filename = os.path.join(temp_excel_dir, file_name)
+         unique_id = str(uuid.uuid4())[:8]
+         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
+         local_filename = os.path.join(temp_excel_dir, file_name)
     #
     #
-    #     await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
     #
-    #     tasks = [process_with_semaphore(row, semaphore,unique_id) for row in rows]
-    #     results = await asyncio.gather(*tasks, return_exceptions=True)
+         tasks = [process_with_semaphore(row, semaphore,unique_id) for row in rows]
+         results = await asyncio.gather(*tasks, return_exceptions=True)
     #
-    #     if any(isinstance(result, Exception) for result in results):
-    #         logger.error("Error occurred during image processing.")
-    #         return {"error": "An error occurred during processing."}
-    #     print(results)
-    #     logger.info("Downloading images")
-    #
-    #     #clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results,send_to_email)
-    #     clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results)
-    #     if clean_results == []:
-    #         send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided\nIf api is disabled this reponse will be sent')
-    #     print(clean_results)
-    #     logger.info("clean_results: {}".format(clean_results))
-    #
-    #     #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
-    #     failed_img_urls = await download_all_images(clean_results, temp_images_dir)
-    #
-    #     contenttype = os.path.splitext(local_filename)[1]
-    #     logger.info("Downloading Excel from web")
-    #     response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
-    #     if response.status_code != 200:
-    #         logger.error(f"Failed to download file: {response.status_code}")
-    #         return {"error": "Failed to download the provided file."}
-    #     with open(local_filename, "wb") as file:
-    #         file.write(response.content)
-    #
+         if any(isinstance(result, Exception) for result in results):
+             logger.error("Error occurred during image processing.")
+             return {"error": "An error occurred during processing."}
+         print(results)
+
+         # logger.info("Downloading images")
+         #
+         # #clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results,send_to_email)
+         # clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results)
+         # if clean_results == []:
+         #     send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided\nIf api is disabled this reponse will be sent')
+         # print(clean_results)
+         # logger.info("clean_results: {}".format(clean_results))
+
+
+
+    # #
+    # #     #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
+    #      failed_img_urls = await download_all_images(clean_results, temp_images_dir)
+    # #
+    #      contenttype = os.path.splitext(local_filename)[1]
+    #      logger.info("Downloading Excel from web")
+    #      response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
+    #      if response.status_code != 200:
+    #          logger.error(f"Failed to download file: {response.status_code}")
+    #          return {"error": "Failed to download the provided file."}
+    #      with open(local_filename, "wb") as file:
+    #          file.write(response.content)
+
     #     logger.info("Writing images to Excel")
     #     failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
     #     print(f"failed rows: {failed_rows}")
@@ -335,10 +389,10 @@ async def process_image_batch(payload: dict):
     #
     #     return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
     #
-    # except Exception as e:
-    #     logger.exception("An unexpected error occurred during processing: %s", e)
-    #     await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f"An unexpected error occurred during processing.\nError: {str(e)}")
-    #     return {"error": f"An unexpected error occurred during processing. Error: {e}"}
+    except Exception as e:
+         logger.exception("An unexpected error occurred during processing: %s", e)
+         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f"An unexpected error occurred during processing.\nError: {str(e)}")
+         return {"error": f"An unexpected error occurred during processing. Error: {e}"}
     
     
 @app.post("/process-image-batch/")
