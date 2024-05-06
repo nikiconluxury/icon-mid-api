@@ -290,7 +290,7 @@ async def process_search_row(search_string,endpoint,entry_id):
                 print('trying again 1')
                 remove_endpoint(endpoint)
                 n_endpoint = remove_endpoint()
-                return process_search_row(search_string,n_endpoint,entry_id)  # Add return here
+                return await process_search_row(search_string,n_endpoint,entry_id)  # Add return here
             else:
                 response_json = response.json()
                 result = response_json.get('body', None)
@@ -301,12 +301,12 @@ async def process_search_row(search_string,endpoint,entry_id):
                         print('trying again 2')
                         remove_endpoint(endpoint)
                         n_endpoint = get_endpoint()
-                        return process_search_row(search_string,n_endpoint,entry_id)  # Add return here
+                        return await process_search_row(search_string,n_endpoint,entry_id)  # Add return here
                     if parsed_data[0][0] == 'No start_tag or end_tag':
                         print('trying again 3')
                         remove_endpoint(endpoint)
                         n_endpoint = get_endpoint()
-                        return process_search_row(search_string,n_endpoint,entry_id)
+                        return await process_search_row(search_string,n_endpoint,entry_id)
                     else:
                         print('parsed data!')
                         image_url = parsed_data[0]
@@ -344,13 +344,13 @@ async def process_search_row(search_string,endpoint,entry_id):
                             print('trying again 4')
                             remove_endpoint(endpoint)
                             n_endpoint = get_endpoint()
-                            return process_search_row(search_string,n_endpoint,entry_id)
+                            return await process_search_row(search_string,n_endpoint,entry_id)
         except requests.RequestException as e:
             print('trying again 5')
             remove_endpoint(endpoint)
             n_endpoint = get_endpoint()
             print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
-            return process_search_row(search_string,n_endpoint,entry_id)
+            return await process_search_row(search_string,n_endpoint,entry_id)
 
 async def process_image_batch(payload: dict):
     start_time = time.time()
@@ -375,7 +375,7 @@ async def process_image_batch(payload: dict):
     loop = asyncio.get_running_loop()
     print(rows)
     try:
-    #     # Create a temporary directory to save downloaded images
+    #    # Create a temporary directory to save downloaded images
          #unique_id = str(uuid.uuid4())[:8]
          #temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
          #local_filename = os.path.join(temp_excel_dir, file_name)
@@ -383,8 +383,8 @@ async def process_image_batch(payload: dict):
     #
          #await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
     #
-         tasks = [process_with_semaphore(row, semaphore,file_id_db) for row in search_df.iterrows()]
-         results = await asyncio.gather(*tasks)#, return_exceptions=True)
+         tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
+         results = await asyncio.gather(*tasks, return_exceptions=True)
     #
          #if any(isinstance(result, Exception) for result in results):
              #logger.error("Error occurred during image processing.")
@@ -457,10 +457,14 @@ def process_payload(background_tasks: BackgroundTasks, payload: dict):
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
 async def process_with_semaphore(row, semaphore,fileid):
-
+    print('ROWWWWWWW')
+    print(row)
+    print(len(row))
+    print('ROWWWWWWW END')
     async with semaphore:
-        entry_id = row[0]
-        searchString = row[1]
+        entry_id = row['EntryID']
+        searchString = row['SearchString']
+        print(f"Entry Id: {entry_id}\nSearch String {searchString}")
         endpoint = get_endpoint()
         await process_search_row(searchString,endpoint,entry_id)  # Assuming process_row is an async function you've defined elsewhere
 
