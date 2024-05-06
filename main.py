@@ -11,6 +11,7 @@ import boto3
 import logging
 from io import BytesIO
 from openpyxl.utils import get_column_letter
+from icon_image_lib.google_parser import get_original_images as GP
 from requests.adapters import HTTPAdapter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib3.util.retry import Retry
@@ -31,7 +32,7 @@ import pyodbc
 from dotenv import load_dotenv
 import pandas as pd
 load_dotenv()
-
+import base64,zlib
 def get_spaces_client():
     logger.info("Creating spaces client")
     session = boto3.session.Session()
@@ -246,36 +247,66 @@ def load_payload_db(rows, file_id):
     df.to_sql(name='utb_ImageScraperRecords', con=engine, index=False, if_exists='append')
 
     return df
-
-
-
-def search_row(self,search_string, endpoint):
+def get_endpoint():
+     connection = pyodbc.connect(conn)
+     cursor = connection.cursor()
+     sql_query = "Select top 1 EndpointURL from utb_Endpoints where EndpointIsBlocked = 0 Order by NewID() "
+     cursor.execute(sql_query)
+     endpoint_url = cursor.fetchone()
+     connection.commit()
+     cursor.close()
+     connection.close()
+     if endpoint_url:
+         (endpoint,) = endpoint_url
+         print(endpoint_url)
+     else:
+         print("No EndpointURL")
+         endpoint = "No EndpointURL"
+     return endpoint
+def remove_endpoint(endpoint):
+    connection = pyodbc.connect(conn)
+    cursor = connection.cursor()
+    sql_query = f"Update utb_Endpoints set EndpointIsBlocked = 1 where  EndpointURL  = '{endpoint}'"
+    cursor.execute(sql_query)
+    connection.commit()
+    cursor.close()
+    connection.close()
+def unpack_content(encoded_content):
+    if encoded_content:
+        compressed_content = base64.b64decode(encoded_content)
+        original_content = zlib.decompress(compressed_content)
+        # with open('text.html', 'w') as file:
+        #     file.write(str(original_content))
+        return original_content # Return as binary data
+    return None
+async def process_search_row(search_string,endpoint,entry_id):
         search_url = f"{endpoint}?query={search_string}"
         print(search_url)
+
         try:
             response = requests.get(search_url, timeout=60)
             print(response.status_code)
             if response.status_code != 200 or response.json().get('body') is None:
                 print('trying again 1')
-                self.remove_endpoint_mysql(endpoint)
-                n_endpoint = self.get_endpoint_mysql()
-                return self.search_row(search_string, n_endpoint)  # Add return here
+                remove_endpoint(endpoint)
+                n_endpoint = remove_endpoint()
+                return process_search_row(search_string,n_endpoint,entry_id)  # Add return here
             else:
                 response_json = response.json()
                 result = response_json.get('body', None)
                 if result:
-                    unpacked_html = self.unpack_content(result)
+                    unpacked_html = unpack_content(result)
                     parsed_data = GP(unpacked_html)
                     if parsed_data is None:
                         print('trying again 2')
-                        self.remove_endpoint_mysql(endpoint)
-                        n_endpoint = self.get_endpoint_mysql()
-                        return self.search_row(search_string, n_endpoint)  # Add return here
+                        remove_endpoint(endpoint)
+                        n_endpoint = get_endpoint()
+                        return process_search_row(search_string,n_endpoint,entry_id)  # Add return here
                     if parsed_data[0][0] == 'No start_tag or end_tag':
                         print('trying again 3')
-                        self.remove_endpoint_mysql(endpoint)
-                        n_endpoint = self.get_endpoint_mysql()
-                        return self.search_row(search_string, n_endpoint)
+                        remove_endpoint(endpoint)
+                        n_endpoint = get_endpoint()
+                        return process_search_row(search_string,n_endpoint,entry_id)
                     else:
                         print('parsed data!')
                         image_url = parsed_data[0]
@@ -284,19 +315,42 @@ def search_row(self,search_string, endpoint):
 
                         print(
                             f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
-                        if image_url and image_desc and image_source:
-                            return image_url, image_desc, image_source
+                        if image_url:
+                            df = pd.DataFrame({
+                                'ImageUrl': image_url,
+                                'ImageDesc': image_desc,
+                                'ImageSource': image_source,
+                            })
+                            if not df.empty:
+                                    df.insert(0, 'EntryId', entry_id)
+                                    df.to_sql(name='utb_ImageScraperResult', con=engine, index=False,
+                                                     if_exists='append')
+
+                                    sql_query = f"update utb_ImageScraperRecords set  Step1 = getdate() where EntryID = {entry_id}"
+
+                                    # Create a cursor from the connection
+                                    connection = pyodbc.connect(conn)
+                                    cursor = connection.cursor()
+
+                                    # Execute the update query
+                                    cursor.execute(sql_query)
+
+                                    # Commit the changes
+                                    connection.commit()
+
+                                    # Close the connection
+                                    connection.close()
                         else:
                             print('trying again 4')
-                            self.remove_endpoint_mysql(endpoint)
-                            n_endpoint = self.get_endpoint_mysql()
-                            return self.search_row(search_string, n_endpoint)
+                            remove_endpoint(endpoint)
+                            n_endpoint = get_endpoint()
+                            return process_search_row(search_string,n_endpoint,entry_id)
         except requests.RequestException as e:
             print('trying again 5')
-            self.remove_endpoint_mysql(endpoint)
-            n_endpoint = self.get_endpoint_mysql()
+            remove_endpoint(endpoint)
+            n_endpoint = get_endpoint()
             print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
-            return self.search_row(search_string, n_endpoint)
+            return process_search_row(search_string,n_endpoint,entry_id)
 
 async def process_image_batch(payload: dict):
     start_time = time.time()
@@ -314,27 +368,28 @@ async def process_image_batch(payload: dict):
     file_id_db = insert_file_db(file_name, provided_file_path)
     print(file_id_db)
     load_payload_db(rows, file_id_db)
-    #search_df = get_records_to_search(file_id_db, engine)
-    #print(search_df)
+    search_df = get_records_to_search(file_id_db, engine)
+    print(search_df)
     
     semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
     loop = asyncio.get_running_loop()
+    print(rows)
     try:
     #     # Create a temporary directory to save downloaded images
-         unique_id = str(uuid.uuid4())[:8]
-         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-         local_filename = os.path.join(temp_excel_dir, file_name)
+         #unique_id = str(uuid.uuid4())[:8]
+         #temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
+         #local_filename = os.path.join(temp_excel_dir, file_name)
     #
     #
-         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+         #await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
     #
-         tasks = [process_with_semaphore(row, semaphore,unique_id) for row in rows]
-         results = await asyncio.gather(*tasks, return_exceptions=True)
+         tasks = [process_with_semaphore(row, semaphore,file_id_db) for row in search_df.iterrows()]
+         results = await asyncio.gather(*tasks)#, return_exceptions=True)
     #
-         if any(isinstance(result, Exception) for result in results):
-             logger.error("Error occurred during image processing.")
-             return {"error": "An error occurred during processing."}
-         print(results)
+         #if any(isinstance(result, Exception) for result in results):
+             #logger.error("Error occurred during image processing.")
+             #return {"error": "An error occurred during processing."}
+         #print(results)
 
          # logger.info("Downloading images")
          #
@@ -402,8 +457,14 @@ def process_payload(background_tasks: BackgroundTasks, payload: dict):
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
 async def process_with_semaphore(row, semaphore,fileid):
+
     async with semaphore:
-        return await process_row(row,fileid)  # Assuming process_row is an async function you've defined elsewhere
+        entry_id = row[0]
+        searchString = row[1]
+        endpoint = get_endpoint()
+        await process_search_row(searchString,endpoint,entry_id)  # Assuming process_row is an async function you've defined elsewhere
+
+
 def highlight_cell(excel_file, cell_reference):
     workbook = openpyxl.load_workbook(excel_file)
     sheet = workbook.active
