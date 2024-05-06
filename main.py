@@ -90,7 +90,7 @@ def send_email(to_emails, subject, download_url, excel_file_path,execution_time,
     <p>Total Elapsed Time: {str(execution_time_timedelta)}</p>
     <p>Message details:<br>{message_with_breaks}</p>
     <a href="{download_url}" class="download-button">Download File</a>
-    <p>API Live View: <a href="http://167.172.18.77:5555/workers">Live Tasks</a></p>
+    <p>API Live View: <a href="http://159.223.162.238:5555/workers">Live Tasks</a></p>
     <p>Beta:v2.4</p>
 </div>
 </body>
@@ -153,7 +153,7 @@ def send_message_email(to_emails, subject,message):
 <div class="container">
     <!-- Use the modified message with <br> for line breaks -->
     <p>Message details:<br>{message_with_breaks}</p>
-    <p>API Live View: <a href="http://167.172.18.77:5555/workers">Live Tasks</a></p>
+    <p>API Live View: <a href="http://159.223.162.238:5555/workers">Live Tasks</a></p>
     <p>Beta:v2.4</p>
 </div>
 </body>
