@@ -321,7 +321,7 @@ def write_failed_downloads_to_excel(failed_downloads, excel_file):
                     # Adjust the cell reference as needed (row index might need +1 depending on header row)
                     cell_reference = f"{get_column_letter(1)}{row_id}"  # Column A, row number
                     worksheet[cell_reference] = str(url)
-                    highlight_cell(excel_file, cell_reference)
+                    #highlight_cell(excel_file, cell_reference)
         workbook.save(excel_file)
         logger.info(f"Failed downloads written to Excel file: {excel_file}")
     else:
