@@ -360,12 +360,15 @@ def prepare_images_for_downloadV2(results):
         print(package)
         if package.get('result', {}).get('url'):
             url = package.get('result').get('url')
+            thumb = package.get('result').get('thumbnail')
+            
             print(url)
             # Ensure the URL is not None or empty.
             if url:
                 if url != 'None found in this filter':
                     print(package.get('absoluteRowIndex'))
-                    images_to_download.append((package.get('absoluteRowIndex'), url))
+                    images_to_download.append((package.get('absoluteRowIndex'), url,thumb))
+    print(images_to_download)
 
     return images_to_download
 
@@ -394,7 +397,7 @@ import tldextract
 from collections import Counter
 def extract_domains_and_counts(data):
     """Extract domains from URLs and count their occurrences."""
-    domains = [tldextract.extract(url).registered_domain for _, url in data]
+    domains = [tldextract.extract(url).registered_domain for _, url,thumb in data]
     domain_counts = Counter(domains)
     return domain_counts
 
@@ -507,7 +510,7 @@ def try_convert_to_png(image_path, new_path, image_name):
     except IOError as e:
         logger.error(f"Failed to convert image to PNG: {e}")
         return False
-async def image_download(semaphore, url, image_name, save_path, session, fallback_formats=None):
+async def image_download(semaphore, url, thumbnail ,image_name, save_path, session, fallback_formats=None):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -550,6 +553,62 @@ async def image_download(semaphore, url, image_name, save_path, session, fallbac
                                 logger.error(f"Failed with fallback format {fmt} for {image_name}: {fallback_exc}")
                 else:
                     logger.error(f"Download failed with status code {response.status} for URL: {url}")
+                    await thumbnail_download(semaphore, thumbnail ,image_name, save_path, session, fallback_formats=None)
+                    
+        except TimeoutError:
+            # Handle the timeout specifically
+            logger.error(f"Timeout occurred while downloading {url} Image: {image_name}")
+            await thumbnail_download(semaphore, thumbnail ,image_name, save_path, session, fallback_formats=None)
+            return False
+        except Exception as exc:
+            logger.error(f"Exception occurred during download or processing for URL: {url}: {exc}", exc_info=True)
+            thumbnail_download(semaphore, thumbnail ,image_name, save_path, session, fallback_formats=None)
+        return False
+    
+async def thumbnail_download(semaphore, url,image_name, save_path, session, fallback_formats=None):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    async with semaphore:
+        if fallback_formats is None:
+            fallback_formats = ['png', 'jpeg', 'gif', 'bmp', 'webp', 'avif', 'tiff', 'ico']
+        
+        logger.info(f"Initiating download for URL: {url} Img: {image_name}")
+        try:
+            async with session.get(url,headers=headers) as response:
+                logger.info(f"Requesting URL: {url} with stream=True")
+                #response = session.get(url, stream=True)
+                logger.info(f"Received response: {response.status } for URL: {url}")
+
+                if response.status == 200:
+                    logger.info(f"Processing content from URL: {url}")
+                    data = await response.read()
+                    image_data = BytesIO(data)
+                    try:
+                        logger.info(f"Attempting to open image stream and save as PNG for {image_name}")
+                        with IMG2.open(image_data) as img:
+                            final_image_path = os.path.join(save_path, f"{image_name}.png")
+                            img.save(final_image_path)
+                            logger.info(f"Successfully saved: {final_image_path}")
+                            return True
+                    except UnidentifiedImageError as e:
+                        logger.error(f"Image file type unidentified, trying fallback formats for {image_name}: {e}")
+                        for fmt in fallback_formats:
+                            image_data.seek(0)  # Reset stream position
+                            try:
+                                logger.info(f"Trying to save image with fallback format {fmt} for {image_name}")
+                                with IMG2.open(image_data) as img:
+                                    final_image_path = os.path.join(save_path, f"{image_name}.{fmt}")
+                                    img.save(final_image_path)
+                                    logger.info(f"Successfully saved with fallback format {fmt}: {final_image_path}")
+                                    return True
+                            except Exception as fallback_exc:
+                                logger.error(f"Failed with fallback format {fmt} for {image_name}: {fallback_exc}")
+                else:
+                    logger.error(f"Download failed with status code {response.status} for URL: {url}")
+                    
         except TimeoutError:
             # Handle the timeout specifically
             logger.error(f"Timeout occurred while downloading {url} Image: {image_name}")
@@ -557,6 +616,9 @@ async def image_download(semaphore, url, image_name, save_path, session, fallbac
         except Exception as exc:
             logger.error(f"Exception occurred during download or processing for URL: {url}: {exc}", exc_info=True)
         return False
+    
+    
+    
 # async def download_all_images(data, save_path):
 #     failed_downloads = []
 #     pool_size = analyze_data(data)  # Placeholder for your actual data analysis function
@@ -602,7 +664,7 @@ async def download_all_images(data, save_path):
 
         logger.info("Scheduling image downloads")
         tasks = [
-            image_download(semaphore, str(item[1]), str(item[0]), save_path, session, index)
+            image_download(semaphore, str(item[1]),str(item[2]), str(item[0]), save_path, session, index)
             for index, item in enumerate(data, start=1)
         ]
 

@@ -24,7 +24,8 @@ global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
     password=os.getenv('DBPASS'),
     port=25060
 )
-
+#from dotenv import load_dotenv
+#load_dotenv()
 async def create_image_task(dataset_split):
     try:
         print(dataset_split)
@@ -74,7 +75,7 @@ def get_task_status(task_id,pool):
     try:
         with conn.cursor(dictionary=True) as cursor:
             query = """
-            SELECT completeTime, EntryID, ImageUrl, ImageDesc
+            SELECT completeTime, EntryID, ImageUrl, ImageDesc,ImageSource,ImageUrlThumbnail
             FROM utb_ImageScraperResult
             WHERE ResultID = %s
             """
@@ -87,9 +88,10 @@ def get_task_status(task_id,pool):
 async def process_queued_item(queue, result_id):
     while True:
         item = await queue.get()
+        print(item)
         if item[0] == result_id:
-            entry_id, image_url, image_desc = await wait_for_completion(result_id, item[1], queue)
-            return entry_id, image_url, image_desc
+            entry_id, image_url, image_desc,image_source,image_thumb = await wait_for_completion(result_id, item[1], queue)
+            return entry_id, image_url, image_desc,image_source,image_thumb
         else:
             # If the item is not the one we're waiting for, put it back in the queue
             await queue.put(item)
@@ -101,9 +103,12 @@ async def wait_for_completion(result_id, db_pool, queue):
             while True:
                 try:
                     result = await loop.run_in_executor(pool, get_task_status, result_id, db_pool)
+                    print('RESULT START')
+                    print(result)
+                    print('RESULT END')
                     if result and result['completeTime']:
                         print(f"Process completed for ResultID {result_id}.")
-                        return result['EntryID'], result['ImageUrl'], result['ImageDesc']
+                        return result['EntryID'], result['ImageUrl'], result['ImageDesc'],result['ImageSource'],result['ImageUrlThumbnail']
                     print("Waiting for process to complete...")
                     await asyncio.sleep(5)  # Async sleep
                 except PoolError as e:
@@ -200,12 +205,12 @@ async def process_row(row,uniqueid):
             logger.info(f"Task ID {task_id} received, starting to poll for completion...")
             queue = asyncio.Queue()
 
-            entry_id, image_url, image_desc = await wait_for_completion(result_id, global_connection_pool, queue)
+            entry_id, image_url, image_desc,image_source,image_thumb = await wait_for_completion(result_id, global_connection_pool, queue)
 
             if entry_id is not None and image_url is not None and image_desc is not None:
                 logger.info(
                     f"Task {task_id} completed with result: (entry_id={entry_id}, image_url={image_url}, image_desc={image_desc})")
-                result_f = {"url": image_url}
+                result_f = {"url": image_url,"description":image_desc,"source":image_source,"thumbnail":image_thumb}
                 return {
                     "result": result_f,
                     "absoluteRowIndex": absolute_row_index,
