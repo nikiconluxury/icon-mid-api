@@ -558,11 +558,12 @@ async def image_download(semaphore, url, thumbnail ,image_name, save_path, sessi
         except TimeoutError:
             # Handle the timeout specifically
             logger.error(f"Timeout occurred while downloading {url} Image: {image_name}")
+            print('timeout error inside the downlaod function')
             await thumbnail_download(semaphore, thumbnail ,image_name, save_path, session, fallback_formats=None)
             return False
         except Exception as exc:
             logger.error(f"Exception occurred during download or processing for URL: {url}: {exc}", exc_info=True)
-            thumbnail_download(semaphore, thumbnail ,image_name, save_path, session, fallback_formats=None)
+            await thumbnail_download(semaphore, thumbnail ,image_name, save_path, session, fallback_formats=None)
         return False
     
 async def thumbnail_download(semaphore, url,image_name, save_path, session, fallback_formats=None):
@@ -677,6 +678,8 @@ async def download_all_images(data, save_path):
                 print(data[index])
                 logger.error(f"Download task generated an exception: {result}")
                 logger.error(f"Trying again with :{str(data[index][2])}")
+                print(f"Download task generated an exception: {result}")
+                print(f"Trying again with :{str(data[index][2])}")
                 thumbnail_download(semaphore, str(data[index][2]),str(data[index][0]), save_path, session, fallback_formats=None)
                 #THUMBNAIL DOWNLOAD ON FAIL
                 failed_downloads.append((data[index][1], data[index][0]))  # Append the image URL and row ID
