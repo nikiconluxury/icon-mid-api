@@ -682,7 +682,7 @@ async def download_all_images(data, save_path):
                 logger.error(f"Trying again with :{str(data[index][2])}")
                 print(f"Download task generated an exception: {result}")
                 print(f"Trying again with :{str(data[index][2])}")
-                thumbnail_download(semaphore, str(data[index][2]),str(data[index][0]), save_path, session, fallback_formats=None)
+                await thumbnail_download(semaphore, str(data[index][2]),str(data[index][0]), save_path, session, fallback_formats=None)
                 #THUMBNAIL DOWNLOAD ON FAIL
                 failed_downloads.append((data[index][1], data[index][0]))  # Append the image URL and row ID
             else:
