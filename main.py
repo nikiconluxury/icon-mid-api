@@ -92,8 +92,7 @@ def send_email(to_emails, subject, download_url, excel_file_path,execution_time,
     <p>Total Elapsed Time: {str(execution_time_timedelta)}</p>
     <p>Message details:<br>{message_with_breaks}</p>
     <a href="{download_url}" class="download-button">Download File</a>
-    <p>API Live View: <a href="http://143.198.11.7:5555/workers">Live Tasks</a></p>
-    <p>Beta:v2.4</p>
+    <p>CMS:v1</p>
 </div>
 </body>
 </html>
@@ -155,8 +154,7 @@ def send_message_email(to_emails, subject,message):
 <div class="container">
     <!-- Use the modified message with <br> for line breaks -->
     <p>Message details:<br>{message_with_breaks}</p>
-    <p>API Live View: <a href="http://143.198.11.7:5555/workers">Live Tasks</a></p>
-    <p>Beta:v2.4</p>
+    <p>CMS:v1</p>
 </div>
 </body>
 </html>
@@ -373,6 +371,12 @@ inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
 
     # Close the connection
     connection.close()
+
+async def generate_download_file(file_id):
+    query = ""
+    print(query)
+    print(file_id)
+
 async def process_image_batch(payload: dict):
     start_time = time.time()
     # Your existing logic here
@@ -480,7 +484,7 @@ def process_payload(background_tasks: BackgroundTasks, payload: dict):
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
 @app.post("/generate-download-file/")
-def process_payload(background_tasks: BackgroundTasks, file_id: str):
+def process_payload(background_tasks: BackgroundTasks, file_id: int):
     logger.info("Received request to process image batch")
     background_tasks.add_task(generate_download_file, file_id)
     return {"message": "Processing started successfully. You will be notified upon completion."}
