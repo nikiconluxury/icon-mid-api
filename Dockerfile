@@ -18,6 +18,7 @@ RUN pip install -r requirements.txt
 # Now copy the rest of the application into the container
 COPY icon_image_lib/ icon_image_lib/
 COPY main.py .
+RUN apt-get update && apt-get install -y lsb-release && apt-get clean all
 RUN bash icon_image_lib/install_sql_server.sh
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
