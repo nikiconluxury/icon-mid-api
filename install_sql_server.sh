@@ -1,5 +1,5 @@
 #!/bin/bash
-sudo apt-get install lsb-core
+apt-get update && apt-get install -y lsb-release && apt-get clean all
 if ! [[ "16.04 18.04 20.04 22.04" == *"$(lsb_release -rs)"* ]];
 then
     echo "Ubuntu $(lsb_release -rs) is not currently supported.";
