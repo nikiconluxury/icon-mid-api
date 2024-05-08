@@ -31,9 +31,9 @@ logger.error("Error message")
 from sqlalchemy import create_engine
 
 import pyodbc
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import pandas as pd
-load_dotenv()
+#load_dotenv()
 import base64,zlib
 def get_spaces_client():
     logger.info("Creating spaces client")
@@ -1015,5 +1015,5 @@ def write_excel_image(local_filename, temp_dir,preferred_image_method):
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server")
     print(os.environ)
-    uvicorn.run("main:app", port=8080, host='0.0.0.0', reload=True)
-    #uvicorn.run("main:app", port=8080, host='0.0.0.0')
+    #uvicorn.run("main:app", port=8080, host='0.0.0.0', reload=True)
+    uvicorn.run("main:app", port=8080, host='0.0.0.0')
