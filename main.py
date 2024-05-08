@@ -352,6 +352,21 @@ async def process_search_row(search_string,endpoint,entry_id):
             n_endpoint = get_endpoint()
             print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
             return await process_search_row(search_string,n_endpoint,entry_id)
+        
+        
+def update_file_generate_complete(file_id):
+    query = f'update utb_ImageScraperFiles set CreateFileCompleteTime = getdate() Where ID = {file_id}'       
+    connection = pyodbc.connect(conn)
+    cursor = connection.cursor()
+
+    # Execute the update query
+    cursor.execute(query)
+    # Commit the changes
+    connection.commit()
+
+    # Close the connection
+    connection.close()    
+        
 def get_file_location(file_id):
     query = f"Select FileLocationUrl from utb_ImageScraperFiles where ID = {file_id}"
     connection = pyodbc.connect(conn)
@@ -366,6 +381,19 @@ def get_file_location(file_id):
     # Close the connection
     connection.close()
     return file_location_url
+
+def update_file_location_complete(file_id,file_location):
+    query = f"update utb_ImageScraperFiles set FileLocationURLComplete = '{file_location}' Where ID ={file_id}"
+    connection = pyodbc.connect(conn)
+    cursor = connection.cursor()
+
+    # Execute the update query
+    cursor.execute(query)
+
+    # Commit the changes
+    connection.commit()
+    connection.close()
+    
 def get_images_excel_db(file_id):
     update_file_start_query = f"update utb_ImageScraperFiles set CreateFileStartTime = getdate() Where ID = {file_id}"
     connection = pyodbc.connect(conn)
@@ -426,15 +454,62 @@ inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
     connection.close()
 
 async def generate_download_file(file_id):
+    preferred_image_method = 'append'
+    
+    start_time = time.time()
     loop = asyncio.get_running_loop()
+    
     selected_images_df = await loop.run_in_executor(ThreadPoolExecutor(), get_images_excel_db, file_id)
     selected_image_list = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download_dataframe,selected_images_df )
+    
     print(selected_images_df.head())
     print(selected_image_list)
-    query = ""
-    print(query)
-    print(file_id)
-
+    
+    provided_file_path = await loop.run_in_executor(ThreadPoolExecutor(), get_file_location,file_id )
+    file_name = provided_file_path.split('/')[-1]
+    temp_images_dir, temp_excel_dir = await create_temp_dirs(file_id)
+    local_filename = os.path.join(temp_excel_dir, file_name)
+    failed_img_urls = await download_all_images(selected_image_list, temp_images_dir)
+    contenttype = os.path.splitext(local_filename)[1]
+    response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
+    if response.status_code != 200:
+        logger.error(f"Failed to download file: {response.status_code}")
+        return {"error": "Failed to download the provided file."}
+    with open(local_filename, "wb") as file:
+        file.write(response.content)
+        
+    logger.info("Writing images to Excel")
+    failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
+    print(f"failed rows: {failed_rows}")
+    #if failed_rows != []:
+    if failed_img_urls:
+        print(failed_img_urls)
+        #fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+        fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_downloads_to_excel, failed_img_urls,local_filename)
+        logger.error(f"Failed to write images for rows: {failed_rows}")
+        logger.error(f"Failed rows added to excel: {fail_rows_written})")
+        
+    logger.info("Uploading file to space")
+    #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
+    is_public = True
+    public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)  
+    await loop.run_in_executor(ThreadPoolExecutor(), update_file_location_complete, file_id, public_url)
+    await loop.run_in_executor(ThreadPoolExecutor(), update_file_generate_complete, file_id)
+    
+    end_time = time.time()
+    execution_time = end_time - start_time
+    #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
+    if os.listdir(temp_images_dir) !=[]:
+        logger.info("Sending email")
+        #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, f'Started {file_name}', public_url, local_filename,execution_time,'')
+    #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
+    logger.info("Cleaning up temporary directories")
+    await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
+    
+    logger.info("Processing completed successfully")
+    
+    return {"message": "Processing completed successfully.", "results": 'hardcoded result value', "public_url": public_url}
+    
 async def process_image_batch(payload: dict):
     start_time = time.time()
     # Your existing logic here
@@ -459,12 +534,9 @@ async def process_image_batch(payload: dict):
     print(rows)
     try:
     #    # Create a temporary directory to save downloaded images
-         unique_id = str(uuid.uuid4())[:8]
-         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-         local_filename = os.path.join(temp_excel_dir, file_name)
     #
     #
-         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
     #
          tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
          await asyncio.gather(*tasks, return_exceptions=True)
