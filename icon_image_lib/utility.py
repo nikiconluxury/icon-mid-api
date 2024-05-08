@@ -4,26 +4,26 @@ import httpx
 import time,os
 from httpx import ConnectTimeout
 import logging
-import mysql.connector
+#import mysql.connector
 from dotenv import load_dotenv
 load_dotenv()
-from mysql.connector import pooling
+#from mysql.connector import pooling
 
 from concurrent.futures import ThreadPoolExecutor
 from asyncio.exceptions import TimeoutError
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-from mysql.connector.errors import PoolError
-global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
-    pool_name="mypool3",
-    pool_size=32,
-    host=os.getenv('DBHOST'),
-    database='defaultdb',
-    user='doadmin',
-    password=os.getenv('DBPASS'),
-    port=25060
-)
+#from mysql.connector.errors import PoolError
+# global_connection_pool = mysql.connector.pooling.MySQLConnectionPool(
+#     pool_name="mypool3",
+#     pool_size=32,
+#     host=os.getenv('DBHOST'),
+#     database='defaultdb',
+#     user='doadmin',
+#     password=os.getenv('DBPASS'),
+#     port=25060
+# )
 
 async def create_image_task(dataset_split):
     try:
