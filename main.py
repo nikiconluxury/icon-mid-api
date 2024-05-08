@@ -359,7 +359,7 @@ select t.*,
 row_number() over (partition by t.EntryID order by t.ResultID) as seqnum
 from utb_ImageScraperResult t 
 inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
-    query2 = f"Where r.FileID = {file_id})update toupdate set SortOrder = seqnum;"
+    query2 = f" Where r.FileID = {file_id})update toupdate set SortOrder = seqnum;"
     query = query + query2
     print(query)
     connection = pyodbc.connect(conn)
