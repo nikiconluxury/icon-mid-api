@@ -456,6 +456,12 @@ def process_payload(background_tasks: BackgroundTasks, payload: dict):
     background_tasks.add_task(process_image_batch, payload)
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
+@app.post("/generate-download-file/")
+def process_payload(background_tasks: BackgroundTasks, file_id: str):
+    logger.info("Received request to process image batch")
+    background_tasks.add_task(generate_download_file, file_id)
+    return {"message": "Processing started successfully. You will be notified upon completion."}
+
 async def process_with_semaphore(row, semaphore,fileid):
     print('ROWWWWWWW')
     print(row)
