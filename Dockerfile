@@ -21,7 +21,7 @@ COPY main.py .
 RUN apt-get update && apt-get install -y lsb-release && apt-get clean all
 RUN yes | apt-get install unixodbc
 RUN bash icon_image_lib/install_sql_server.sh
-RUN sudo apt-get update
+RUN apt-get update
 
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
