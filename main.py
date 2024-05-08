@@ -384,7 +384,7 @@ inner join utb_ImageScraperResult r on r.EntryID = s.EntryID
 Where f.ID = $FileID$ and r.SortOrder = 1
 Order by s.ExcelRowID"""
 
-    query_get_images_to_excel = query_get_images_to_excel.replace('$FileID$',file_id)
+    query_get_images_to_excel = query_get_images_to_excel.replace('$FileID$',str(file_id))
     print(query_get_images_to_excel)
     # Close the connection
 
