@@ -412,7 +412,7 @@ def get_images_excel_db(file_id):
     connection.commit()
     connection.close()
 
-    query_get_images_to_excel = """Select s.ExcelRowID, r.ImageSource, r.ImageUrlThumbnail from utb_ImageScraperFiles f
+    query_get_images_to_excel = """Select s.ExcelRowID, r.ImageUrl, r.ImageUrlThumbnail from utb_ImageScraperFiles f
 inner join utb_ImageScraperRecords s on s.FileID = f.ID 
 inner join utb_ImageScraperResult r on r.EntryID = s.EntryID 
 Where f.ID = $FileID$ and r.SortOrder = 1
