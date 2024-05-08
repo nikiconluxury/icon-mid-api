@@ -362,6 +362,17 @@ inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
     query2 = f"Where r.FileID = {file_id})update toupdate set SortOrder = seqnum;"
     query = query + query2
     print(query)
+    connection = pyodbc.connect(conn)
+    cursor = connection.cursor()
+
+    # Execute the update query
+    cursor.execute(query)
+
+    # Commit the changes
+    connection.commit()
+
+    # Close the connection
+    connection.close()
 async def process_image_batch(payload: dict):
     start_time = time.time()
     # Your existing logic here
@@ -391,12 +402,12 @@ async def process_image_batch(payload: dict):
          #local_filename = os.path.join(temp_excel_dir, file_name)
     #
     #
-         #await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
     #
          tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
          results = await asyncio.gather(*tasks, return_exceptions=True)
 
-         await loop.run_in_executor(ThreadPoolExecutor(), update_sort_order(file_id_db))
+         await loop.run_in_executor(ThreadPoolExecutor(), update_sort_order,file_id_db)
     #
          #if any(isinstance(result, Exception) for result in results):
              #logger.error("Error occurred during image processing.")
