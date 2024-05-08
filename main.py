@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 logger.info("Informational message")
 logger.error("Error message")
 from sqlalchemy import create_engine
-global conn
+
 import pyodbc
 from dotenv import load_dotenv
 import pandas as pd
@@ -201,7 +201,7 @@ async def cleanup_temp_dirs(directories):
 
 pwd_value = str(os.environ.get('MSSQLS_PWD'))
 pwd_str =f"Pwd={pwd_value};"
-
+global conn
 conn = "DRIVER={ODBC Driver 17 for SQL Server};Server=35.172.243.170;Database=luxurymarket_p4;Uid=luxurysitescraper;" + pwd_str
 global engine
 engine = create_engine("mssql+pyodbc:///?odbc_connect=%s" % conn)
