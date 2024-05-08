@@ -5,8 +5,8 @@ import time,os
 from httpx import ConnectTimeout
 import logging
 #import mysql.connector
-# from dotenv import load_dotenv
-# load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 #from mysql.connector import pooling
 
 from concurrent.futures import ThreadPoolExecutor

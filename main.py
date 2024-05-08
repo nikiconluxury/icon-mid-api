@@ -31,9 +31,9 @@ logger.error("Error message")
 from sqlalchemy import create_engine
 
 import pyodbc
-#from dotenv import load_dotenv
+from dotenv import load_dotenv
 import pandas as pd
-#load_dotenv()
+load_dotenv()
 import base64,zlib
 def get_spaces_client():
     logger.info("Creating spaces client")
