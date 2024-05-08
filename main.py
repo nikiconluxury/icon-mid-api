@@ -380,6 +380,12 @@ def get_file_location(file_id):
 
     # Close the connection
     connection.close()
+    if file_location_url:
+        (file_location_url,) = file_location_url
+        print(file_location_url)
+    else:
+
+        file_location_url = "No File Found"
     return file_location_url
 
 def update_file_location_complete(file_id,file_location):
