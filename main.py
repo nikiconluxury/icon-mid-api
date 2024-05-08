@@ -397,12 +397,12 @@ async def process_image_batch(payload: dict):
     print(rows)
     try:
     #    # Create a temporary directory to save downloaded images
-         #unique_id = str(uuid.uuid4())[:8]
-         #temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
-         #local_filename = os.path.join(temp_excel_dir, file_name)
+         unique_id = str(uuid.uuid4())[:8]
+         temp_images_dir, temp_excel_dir = await create_temp_dirs(unique_id)
+         local_filename = os.path.join(temp_excel_dir, file_name)
     #
     #
-         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
+         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nBatch ID: {unique_id}\nLocation: {local_filename}\nUploaded File: {provided_file_path}')
     #
          tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
          results = await asyncio.gather(*tasks, return_exceptions=True)
