@@ -428,7 +428,9 @@ inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
 async def generate_download_file(file_id):
     loop = asyncio.get_running_loop()
     selected_images_df = await loop.run_in_executor(ThreadPoolExecutor(), get_images_excel_db, file_id)
+    selected_image_list = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_download_dataframe,selected_images_df )
     print(selected_images_df.head())
+    print(selected_image_list)
     query = ""
     print(query)
     print(file_id)
@@ -611,21 +613,22 @@ def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
         # Save the workbook
         workbook.save(excel_file_path)
     return added_rows
-def prepare_images_for_downloadV2(results):
+def prepare_images_for_download_dataframe(df):
     images_to_download = []
 
-    for package in results:
-        print(package)
-        if package.get('result', {}).get('url'):
-            url = package.get('result').get('url')
-            print(url)
-            # Ensure the URL is not None or empty.
-            if url:
-                if url != 'None found in this filter':
-                    print(package.get('absoluteRowIndex'))
-                    images_to_download.append((package.get('absoluteRowIndex'), url))
+    for row in df.itertuples(index=False):
+        print(row)
+        # print(row)
+        # if row.get('result', {}).get('url'):
+        #     url = package.get('result').get('url')
+        #     print(url)
+        #     # Ensure the URL is not None or empty.
+        #     if url:
+        #         if url != 'None found in this filter':
+        #             print(package.get('absoluteRowIndex'))
+        #             images_to_download.append((package.get('absoluteRowIndex'), url))
 
-    return images_to_download
+    # return images_to_download
 
 def prepare_images_for_download(results,send_to_email):
     images_to_download = []
