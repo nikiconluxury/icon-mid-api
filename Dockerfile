@@ -13,11 +13,12 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 #pip install --upgrade pip && \
     #pip install --no-cache-dir -r requirements.txt
+RUN sudo apt install unixodbc
 
 # Now copy the rest of the application into the container
 COPY icon_image_lib/ icon_image_lib/
 COPY main.py .
-
+RUN bash icon_image_lib/install_sql_server.sh
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
 
