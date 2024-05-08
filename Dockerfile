@@ -21,4 +21,4 @@ COPY main.py .
 EXPOSE 8080
 
 # Run main.py when the container launches
-CMD ["python3", "main.py"]
+CMD ["python", "main.py"]
