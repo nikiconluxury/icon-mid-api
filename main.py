@@ -618,17 +618,10 @@ def prepare_images_for_download_dataframe(df):
 
     for row in df.itertuples(index=False,name=None):
         print(row)
-        # print(row)
-        # if row.get('result', {}).get('url'):
-        #     url = package.get('result').get('url')
-        #     print(url)
-        #     # Ensure the URL is not None or empty.
-        #     if url:
-        #         if url != 'None found in this filter':
-        #             print(package.get('absoluteRowIndex'))
-        #             images_to_download.append((package.get('absoluteRowIndex'), url))
+        if row[1] != 'No google image results found':
+            images_to_download.append(row)
 
-    # return images_to_download
+    return images_to_download
 
 def prepare_images_for_download(results,send_to_email):
     images_to_download = []
