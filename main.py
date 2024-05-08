@@ -726,7 +726,7 @@ import tldextract
 from collections import Counter
 def extract_domains_and_counts(data):
     """Extract domains from URLs and count their occurrences."""
-    domains = [tldextract.extract(url).registered_domain for _, url in data]
+    domains = [tldextract.extract(url).registered_domain for _, url,thumb in data]
     domain_counts = Counter(domains)
     return domain_counts
 
