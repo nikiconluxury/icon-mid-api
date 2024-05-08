@@ -430,11 +430,10 @@ def update_sort_order(file_id):
 select t.*,
 row_number() over (partition by t.EntryID order by t.ResultID) as seqnum
 from utb_ImageScraperResult t 
-inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
+inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID 
+Where r.FileID = $FileID$ ) update toupdate set SortOrder = seqnum;"""
 
-    query2 = f" Where r.FileID = {file_id}) update toupdate set SortOrder = seqnum;"
-    query = query + query2
-    print(query)
+    query = query.replace('$FileID$',str(file_id))
     connection = pyodbc.connect(conn)
     cursor = connection.cursor()
 
@@ -446,6 +445,13 @@ inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
 
     # Close the connection
     connection.close()
+    
+    
+    
+    
+    
+    
+    
     complete_query = f"update utb_ImageScraperFiles set ImageCompleteTime = getdate() Where ID = {file_id}"
     connection = pyodbc.connect(conn)
     cursor = connection.cursor()

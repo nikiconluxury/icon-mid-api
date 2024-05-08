@@ -18,11 +18,18 @@ RUN pip install -r requirements.txt
 # Now copy the rest of the application into the container
 COPY icon_image_lib/ icon_image_lib/
 COPY main.py .
+COPY install_sql_server.sh .
+RUN apt-get -y update; apt-get -y install curl
 RUN apt-get update && apt-get install -y lsb-release && apt-get clean all
 RUN yes | apt-get install unixodbc
-RUN bash icon_image_lib/install_sql_server.sh
 RUN apt-get update
 
+
+
+RUN chmod +x install_sql_server.sh
+RUN bash install_sql_server.sh
+RUN apt-get update
+RUN odbcinst -j
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
 
