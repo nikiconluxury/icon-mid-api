@@ -616,7 +616,7 @@ def write_failed_img_urls(excel_file_path, clean_results, failed_rows):
 def prepare_images_for_download_dataframe(df):
     images_to_download = []
 
-    for row in df.itertuples(index=False):
+    for row in df.itertuples(index=False,name=None):
         print(row)
         # print(row)
         # if row.get('result', {}).get('url'):
