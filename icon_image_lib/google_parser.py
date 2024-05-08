@@ -2,6 +2,97 @@ import re,chardet
 from icon_image_lib.LR import LR
 
 
+# def get_original_images(html_bytes):
+#     try:
+#         detected_encoding = chardet.detect(html_bytes)['encoding']
+#         soup = html_bytes.decode(detected_encoding)
+#     except Exception as e:
+#         print(e)
+#         soup = html_bytes.decode('utf-8')
+#
+#     #print(f"type: { type(soup)}")
+#
+#     start_tag = 'FINANCE",[22,1]]]]]'
+#     end_tag = ':[null,null,null,1,['
+#     # with open('text.html', 'w', encoding='utf-8') as file:
+#     #      file.write(soup)
+#     matched_google_image_data = LR().get(soup, start_tag, end_tag)
+#     if 'Error' in matched_google_image_data:
+#         return None
+#     if not matched_google_image_data:
+#         print('No matched_google_image_data')
+#         return (['No start_tag or end_tag'],['No start_tag or end_tag'],['No start_tag or end_tag'])
+#     matched_google_image_data = str(matched_google_image_data).replace('\u003d','=')
+#     matched_google_image_data = str(matched_google_image_data).replace('\u0026', '&')
+#
+#     print(matched_google_image_data)
+#     print(type(matched_google_image_data))
+#
+#     # thumbnails = [
+#     #     bytes(bytes(thumbnail, 'utf-8').decode("unicode-escape"), "utf-8").decode("unicode-escape") for thumbnail in
+#     #     matched_google_image_data
+#     # ]
+#     # print(thumbnails)
+#     thumbnails = matched_google_image_data
+#     if '"2003":' not in thumbnails:
+#         print('No 2003 tag found')
+#         return (['No google image results found'],['No google image results found'],['No google image results found'])
+#     # matched_google_images_thumbnails = ", ".join(
+#     #     re.findall(r'\[\"(https\:\/\/encrypted-tbn0\.gstatic\.com\/images\?.*?)\",\d+,\d+\]',
+#     #                str(thumbnails))).split(", ")
+#
+#     regex_pattern_desc = r'"2003":\[null,"[^"]*","[^"]*","(.*?)"'
+#     # print(matched_google_images_thumbnails)
+#     matched_description = re.findall(regex_pattern_desc, str(thumbnails))
+#
+#     regex_pattern_src = r'"2003":\[null,"[^"]*","(.*?)"'
+#     matched_source = re.findall(regex_pattern_src, str(thumbnails))
+#     #print(matched_source)
+#     removed_matched_google_images_thumbnails = re.sub(
+#         r'\[\"(https\:\/\/encrypted-tbn0\.gstatic\.com\/images\?.*?)\",\d+,\d+\]', "", str(thumbnails))
+#
+#     # Extract full resolution images
+#     matched_google_full_resolution_images = re.findall(r"(?:|,),\[\"(https:|http.*?)\",\d+,\d+\]",
+#                                                        removed_matched_google_images_thumbnails)
+#
+#     #print(len(matched_description))
+#
+#     full_res_images = [
+#         bytes(bytes(img, "utf-8").decode("unicode-escape"), "utf-8").decode("unicode-escape") for img in
+#         matched_google_full_resolution_images
+#     ]
+#     cleaned_urls = [clean_image_url(url) for url in full_res_images]
+#     cleaned_source = [clean_source_url(url) for url in matched_source]
+#
+#     # print(len(cleaned_descriptions))
+#     # print(matched_description)
+#     # Assume descriptions are extracted
+#     # descriptions = LR().get(soup, '"2008":[null,"', '"]}],null,') # Replace 'description_pattern' with your actual regex pattern for descriptions
+#
+#     final_thumbnails = []
+#     final_full_res_images = []
+#     final_descriptions = []
+#     print(type(matched_description))
+#     print('made it')
+#     if len(cleaned_urls) >= 10:
+#         print('made it above 10')
+#         final_image_urls = cleaned_urls[:10]
+#         final_descriptions = matched_description[:10]
+#         final_source_url = cleaned_source[:10]
+#         return final_image_urls, final_descriptions, final_source_url
+#     else:
+#         print('made it below 10')
+#         min_length = min(len(cleaned_urls), len(matched_description), len(cleaned_source))
+#
+#         print(f"{min_length}\nImg Urls: {len(cleaned_urls)}\nDescriptions: {len(matched_description)}\nSource Urls: {len(cleaned_source)}")
+#         final_image_urls = cleaned_urls[:min_length]
+#         final_descriptions = matched_description[:min_length]
+#         final_source_url = cleaned_source[:min_length]
+#         print(f"{min_length}\nImg Urls New: {len(final_image_urls)}\nDescriptions New: {len(final_descriptions)}\nSource Urls New: {len(final_source_url)}")
+#         return final_image_urls, final_descriptions,final_source_url
+#
+#
+#
 def get_original_images(html_bytes):
     try:
         detected_encoding = chardet.detect(html_bytes)['encoding']
@@ -21,7 +112,7 @@ def get_original_images(html_bytes):
         return None
     if not matched_google_image_data:
         print('No matched_google_image_data')
-        return (['No start_tag or end_tag'],['No start_tag or end_tag'],['No start_tag or end_tag'])
+        return (['No start_tag or end_tag'],['No start_tag or end_tag'],['No start_tag or end_tag'],['No start_tag or end_tag'])
     matched_google_image_data = str(matched_google_image_data).replace('\u003d','=')
     matched_google_image_data = str(matched_google_image_data).replace('\u0026', '&')
 
@@ -36,10 +127,11 @@ def get_original_images(html_bytes):
     thumbnails = matched_google_image_data
     if '"2003":' not in thumbnails:
         print('No 2003 tag found')
-        return (['No google image results found'],['No google image results found'],['No google image results found'])
-    # matched_google_images_thumbnails = ", ".join(
-    #     re.findall(r'\[\"(https\:\/\/encrypted-tbn0\.gstatic\.com\/images\?.*?)\",\d+,\d+\]',
-    #                str(thumbnails))).split(", ")
+        return (['No google image results found'],['No google image results found'],['No google image results found'],['No google image results found'])
+    matched_google_images_thumbnails = ", ".join(
+         re.findall(r'\[\"(https\:\/\/encrypted-tbn0\.gstatic\.com\/images\?.*?)\",\d+,\d+\]',
+                    str(thumbnails))).split(", ")
+
 
     regex_pattern_desc = r'"2003":\[null,"[^"]*","[^"]*","(.*?)"'
     # print(matched_google_images_thumbnails)
@@ -63,7 +155,7 @@ def get_original_images(html_bytes):
     ]
     cleaned_urls = [clean_image_url(url) for url in full_res_images]
     cleaned_source = [clean_source_url(url) for url in matched_source]
-
+    cleaned_thumbs = [clean_source_url(url) for url in matched_google_images_thumbnails]
     # print(len(cleaned_descriptions))
     # print(matched_description)
     # Assume descriptions are extracted
@@ -79,7 +171,8 @@ def get_original_images(html_bytes):
         final_image_urls = cleaned_urls[:10]
         final_descriptions = matched_description[:10]
         final_source_url = cleaned_source[:10]
-        return final_image_urls, final_descriptions, final_source_url
+        final_thumbs = cleaned_thumbs[:10]
+        return final_image_urls, final_descriptions, final_source_url,final_thumbs
     else:
         print('made it below 10')
         min_length = min(len(cleaned_urls), len(matched_description), len(cleaned_source))
@@ -88,8 +181,9 @@ def get_original_images(html_bytes):
         final_image_urls = cleaned_urls[:min_length]
         final_descriptions = matched_description[:min_length]
         final_source_url = cleaned_source[:min_length]
-        print(f"{min_length}\nImg Urls New: {len(final_image_urls)}\nDescriptions New: {len(final_descriptions)}\nSource Urls New: {len(final_source_url)}")
-        return final_image_urls, final_descriptions,final_source_url
+        final_thumbs = cleaned_thumbs[:min_length]
+        print(f"{min_length}\nImg Urls New: {len(final_image_urls)}\nDescriptions New: {len(final_descriptions)}\nSource Urls New: {len(final_source_url)}\nThumbs New: {len(final_thumbs)}")
+        return final_image_urls, final_descriptions, final_source_url,final_thumbs
 def clean_source_url(s):
     # First, remove '\\\\' to simplify handling
     simplified_str = s.replace('\\\\', '')

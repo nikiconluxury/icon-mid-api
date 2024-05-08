@@ -312,6 +312,7 @@ async def process_search_row(search_string,endpoint,entry_id):
                         image_url = parsed_data[0]
                         image_desc = parsed_data[1]
                         image_source = parsed_data[2]
+                        image_thumb = parsed_data[3]
 
                         print(
                             f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
@@ -320,6 +321,7 @@ async def process_search_row(search_string,endpoint,entry_id):
                                 'ImageUrl': image_url,
                                 'ImageDesc': image_desc,
                                 'ImageSource': image_source,
+                                'ImageUrlThumbnail':image_thumb,
                             })
                             if not df.empty:
                                     df.insert(0, 'EntryId', entry_id)
@@ -351,7 +353,15 @@ async def process_search_row(search_string,endpoint,entry_id):
             n_endpoint = get_endpoint()
             print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
             return await process_search_row(search_string,n_endpoint,entry_id)
-
+def update_sort_order(file_id):
+    query = """with toupdate as (
+select t.*,
+row_number() over (partition by t.EntryID order by t.ResultID) as seqnum
+from utb_ImageScraperResult t 
+inner join utb_ImageScraperRecords r on r.EntryID = t.EntryID"""
+    query2 = f"Where r.FileID = {file_id})update toupdate set SortOrder = seqnum;"
+    query = query + query2
+    print(query)
 async def process_image_batch(payload: dict):
     start_time = time.time()
     # Your existing logic here
@@ -385,6 +395,8 @@ async def process_image_batch(payload: dict):
     #
          tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
          results = await asyncio.gather(*tasks, return_exceptions=True)
+
+         await loop.run_in_executor(ThreadPoolExecutor(), update_sort_order(file_id_db))
     #
          #if any(isinstance(result, Exception) for result in results):
              #logger.error("Error occurred during image processing.")
