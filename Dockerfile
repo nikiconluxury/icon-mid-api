@@ -19,7 +19,7 @@ RUN pip install -r requirements.txt
 COPY icon_image_lib/ icon_image_lib/
 COPY main.py .
 RUN apt-get update && apt-get install -y lsb-release && apt-get clean all
-RUN apt-get install unixodbc
+RUN yes | apt-get install unixodbc
 RUN bash icon_image_lib/install_sql_server.sh
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
