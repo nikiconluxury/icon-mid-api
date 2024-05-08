@@ -10,8 +10,9 @@ COPY requirements.txt .
 # Install dependencies
 # Doing this before copying the entire application allows us to cache the installed dependencies layer
 # and not reinstall them on every build unless requirements.txt changes
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
+#pip install --upgrade pip && \
+    #pip install --no-cache-dir -r requirements.txt
 
 # Now copy the rest of the application into the container
 COPY icon_image_lib/ icon_image_lib/
