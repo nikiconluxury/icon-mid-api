@@ -655,7 +655,8 @@ def process_image_batch(payload: dict):
             logger.exception("An unexpected error occurred during processing: %s", e)
 
         async def send_email_task():
-            await send_message_email(send_to_email, f'Started {file_name}',
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None,send_message_email,send_to_email, f'Started {file_name}',
 
                                      f"An unexpected error occurred during processing.\nError: {str(e)}")
 
