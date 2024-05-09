@@ -620,6 +620,8 @@ async def generate_download_file(file_id):
 #          await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f"An unexpected error occurred during processing.\nError: {str(e)}")
 #          return {"error": f"An unexpected error occurred during processing. Error: {e}"}
 #
+import asyncio
+
 def process_image_batch(payload: dict):
     logger.info(f"Processing started for payload: {payload}")
     rows = payload.get('rowData', [])
@@ -636,21 +638,24 @@ def process_image_batch(payload: dict):
 
     semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
 
-    try:
-        # send_message_email(send_to_email, f'Started {file_name}',f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
+    async def run_tasks():
+        try:
+            # send_message_email(send_to_email, f'Started {file_name}',f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
 
-        tasks = [process_with_semaphore(row, semaphore, file_id_db) for _, row in search_df.iterrows()]
-        asyncio.create_task(asyncio.gather(*tasks, return_exceptions=True))
+            tasks = [process_with_semaphore(row, semaphore, file_id_db) for _, row in search_df.iterrows()]
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-        asyncio.create_task(update_sort_order(file_id_db))
+            await update_sort_order(file_id_db)
 
-        # return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
+            # return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
-    except Exception as e:
-        logger.exception("An unexpected error occurred during processing: %s", e)
-        asyncio.create_task(send_message_email(send_to_email, f'Started {file_name}',
-                                               f"An unexpected error occurred during processing.\nError: {str(e)}"))
-        # return {"error": f"An unexpected error occurred during processing. Error: {e}"}
+        except Exception as e:
+            logger.exception("An unexpected error occurred during processing: %s", e)
+            await send_message_email(send_to_email, f'Started {file_name}',
+                                     f"An unexpected error occurred during processing.\nError: {str(e)}")
+            # return {"error": f"An unexpected error occurred during processing. Error: {e}"}
+
+    asyncio.run(run_tasks())
 @app.post("/process-image-batch/")
 async def process_payload(background_tasks: BackgroundTasks, payload: dict):
     logger.info("Received request to process image batch")
