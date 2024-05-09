@@ -317,7 +317,7 @@ async def process_search_row(search_string,endpoint,entry_id):
 
                         print(
                             f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
-                        if image_url:
+                        if image_url and len(image_url) >= 8:
                             df = pd.DataFrame({
                                 'ImageUrl': image_url,
                                 'ImageDesc': image_desc,
@@ -645,7 +645,8 @@ def process_image_batch(payload: dict):
             tasks = [process_with_semaphore(row, semaphore, file_id_db) for _, row in search_df.iterrows()]
             await asyncio.gather(*tasks, return_exceptions=True)
 
-            await update_sort_order(file_id_db)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, update_sort_order, file_id_db)
 
             # return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
