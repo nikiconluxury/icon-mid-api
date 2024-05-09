@@ -317,7 +317,7 @@ async def process_search_row(search_string,endpoint,entry_id):
 
                         print(
                             f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
-                        if image_url and len(image_url) >= 8:
+                        if image_url:
                             df = pd.DataFrame({
                                 'ImageUrl': image_url,
                                 'ImageDesc': image_desc,
