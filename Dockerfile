@@ -30,8 +30,7 @@ RUN chmod +x install_sql_server.sh
 RUN bash install_sql_server.sh
 RUN apt-get update
 RUN odbcinst -j
-RUN DD_API_KEY="228af60e51d9413d70070b1162bee174" DD_SITE="datadoghq.com" bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script_agent7.sh)"
-RUN datadog-agent status
+
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
 
