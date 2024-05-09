@@ -235,7 +235,9 @@ def load_payload_db(rows, file_id):
     df = df.rename(columns={
         'absoluteRowIndex': 'ExcelRowID',  # Renaming 'index' to 'ExcelRowID'
         'searchValue': 'ProductModel',  # Renaming 'SKU' to 'ProductModel'
-        'brandValue': 'ProductBrand'  # Renaming 'Brand' to 'ProductBrand'
+        'brandValue': 'ProductBrand',  # Renaming 'Brand' to 'ProductBrand'
+        'colorValue': 'ProductColor',
+        'CategoryValue': 'ProductCategory'
     })
 
     # Insert new column 'FileID' at the beginning with all values set to file_id
@@ -620,13 +622,13 @@ async def process_image_batch(payload: dict):
     
     
 @app.post("/process-image-batch/")
-def process_payload(background_tasks: BackgroundTasks, payload: dict):
+async def process_payload(background_tasks: BackgroundTasks, payload: dict):
     logger.info("Received request to process image batch")
     background_tasks.add_task(process_image_batch, payload)
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
 @app.post("/generate-download-file/")
-def process_payload(background_tasks: BackgroundTasks, file_id: int):
+async def process_file(background_tasks: BackgroundTasks, file_id: int):
     logger.info("Received request to process image batch")
     background_tasks.add_task(generate_download_file, str(file_id))
     return {"message": "Processing started successfully. You will be notified upon completion."}
