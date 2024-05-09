@@ -166,12 +166,12 @@ def get_original_images(html_bytes):
     final_descriptions = []
     print(type(matched_description))
     print('made it')
-    if len(cleaned_urls) >= 10:
+    if len(cleaned_urls) >= 8:
         print('made it above 10')
-        final_image_urls = cleaned_urls[:10]
-        final_descriptions = matched_description[:10]
-        final_source_url = cleaned_source[:10]
-        final_thumbs = cleaned_thumbs[:10]
+        final_image_urls = cleaned_urls[:8]
+        final_descriptions = matched_description[:8]
+        final_source_url = cleaned_source[:8]
+        final_thumbs = cleaned_thumbs[:8]
         return final_image_urls, final_descriptions, final_source_url,final_thumbs
     else:
         print('made it below 10')
