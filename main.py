@@ -524,12 +524,103 @@ async def generate_download_file(file_id):
     
     return {"message": "Processing completed successfully.", "results": 'hardcoded result value', "public_url": public_url}
     
-async def process_image_batch(payload: dict):
-    start_time = time.time()
-    # Your existing logic here
-    # Include all steps from processing start to finish,
-    # such as downloading images, writing images to Excel, etc.
-
+# async def process_image_batch(payload: dict):
+#     start_time = time.time()
+#     # Your existing logic here
+#     # Include all steps from processing start to finish,
+#     # such as downloading images, writing images to Excel, etc.
+#
+#     logger.info(f"Processing started for payload: {payload}")
+#     rows = payload.get('rowData', [])
+#     provided_file_path = payload.get('filePath')
+#     logger.info("Received request to process image batch")
+#     file_name = provided_file_path.split('/')[-1]
+#     send_to_email = payload.get('sendToEmail', 'nik@iconluxurygroup.com')
+#     preferred_image_method = payload.get('preferredImageMethod', 'append')
+#     file_id_db = insert_file_db(file_name, provided_file_path)
+#     print(file_id_db)
+#     load_payload_db(rows, file_id_db)
+#     search_df = get_records_to_search(file_id_db, engine)
+#     print(search_df)
+#
+#     semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
+#     loop = asyncio.get_running_loop()
+#     print(rows)
+#     try:
+#     #    # Create a temporary directory to save downloaded images
+#     #
+#     #
+#          await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
+#     #
+#          tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
+#          await asyncio.gather(*tasks, return_exceptions=True)
+#
+#          await loop.run_in_executor(ThreadPoolExecutor(), update_sort_order,file_id_db)
+#     #
+#          #if any(isinstance(result, Exception) for result in results):
+#              #logger.error("Error occurred during image processing.")
+#              #return {"error": "An error occurred during processing."}
+#          #print(results)
+#
+#          # logger.info("Downloading images")
+#          #
+#          # #clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results,send_to_email)
+#          # clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results)
+#          # if clean_results == []:
+#          #     send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided\nIf api is disabled this reponse will be sent')
+#          # print(clean_results)
+#          # logger.info("clean_results: {}".format(clean_results))
+#
+#
+#
+#     # #
+#     # #     #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
+#     #      failed_img_urls = await download_all_images(clean_results, temp_images_dir)
+#     # #
+#     #      contenttype = os.path.splitext(local_filename)[1]
+#     #      logger.info("Downloading Excel from web")
+#     #      response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
+#     #      if response.status_code != 200:
+#     #          logger.error(f"Failed to download file: {response.status_code}")
+#     #          return {"error": "Failed to download the provided file."}
+#     #      with open(local_filename, "wb") as file:
+#     #          file.write(response.content)
+#
+#     #     logger.info("Writing images to Excel")
+#     #     failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
+#     #     print(f"failed rows: {failed_rows}")
+#     #     #if failed_rows != []:
+#     #     if failed_img_urls:
+#     #         print(failed_img_urls)
+#     #         #fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
+#     #         fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_downloads_to_excel, failed_img_urls,local_filename)
+#     #         logger.error(f"Failed to write images for rows: {failed_rows}")
+#     #         logger.error(f"Failed rows added to excel: {fail_rows_written})")
+#     #
+#     #     logger.info("Uploading file to space")
+#     #     #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
+#     #     is_public = True
+#     #     public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)
+#     #     end_time = time.time()
+#     #     execution_time = end_time - start_time
+#     #     #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
+#     #     if os.listdir(temp_images_dir) !=[]:
+#     #         logger.info("Sending email")
+#     #         await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, f'Started {file_name}', public_url, local_filename,execution_time,'')
+#     #     #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
+#     #     logger.info("Cleaning up temporary directories")
+#     #     await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
+#     #
+#     #     logger.info("Processing completed successfully")
+#     #
+#     #     return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
+#     #
+#     except Exception as e:
+#          logger.exception("An unexpected error occurred during processing: %s", e)
+#          await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f"An unexpected error occurred during processing.\nError: {str(e)}")
+#          return {"error": f"An unexpected error occurred during processing. Error: {e}"}
+#
+def process_image_batch(payload: dict):
     logger.info(f"Processing started for payload: {payload}")
     rows = payload.get('rowData', [])
     provided_file_path = payload.get('filePath')
@@ -542,97 +633,35 @@ async def process_image_batch(payload: dict):
     load_payload_db(rows, file_id_db)
     search_df = get_records_to_search(file_id_db, engine)
     print(search_df)
-    
+
     semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
-    loop = asyncio.get_running_loop()
-    print(rows)
+
     try:
-    #    # Create a temporary directory to save downloaded images
-    #
-    #
-         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
-    #
-         tasks = [process_with_semaphore(row, semaphore,file_id_db) for _, row in search_df.iterrows()]
-         await asyncio.gather(*tasks, return_exceptions=True)
+        # send_message_email(send_to_email, f'Started {file_name}',f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
 
-         await loop.run_in_executor(ThreadPoolExecutor(), update_sort_order,file_id_db)
-    #
-         #if any(isinstance(result, Exception) for result in results):
-             #logger.error("Error occurred during image processing.")
-             #return {"error": "An error occurred during processing."}
-         #print(results)
+        tasks = [process_with_semaphore(row, semaphore, file_id_db) for _, row in search_df.iterrows()]
+        asyncio.create_task(asyncio.gather(*tasks, return_exceptions=True))
 
-         # logger.info("Downloading images")
-         #
-         # #clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results,send_to_email)
-         # clean_results = await loop.run_in_executor(ThreadPoolExecutor(), prepare_images_for_downloadV2, results)
-         # if clean_results == []:
-         #     send_message_email(send_to_email,f'Started {file_name}','No images found\nPlease make sure correct column values are provided\nIf api is disabled this reponse will be sent')
-         # print(clean_results)
-         # logger.info("clean_results: {}".format(clean_results))
+        asyncio.create_task(update_sort_order(file_id_db))
 
+        # return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
 
-
-    # #
-    # #     #d_complete_ = await loop.run_in_executor(ThreadPoolExecutor(), download_all_images, clean_results, temp_images_dir)
-    #      failed_img_urls = await download_all_images(clean_results, temp_images_dir)
-    # #
-    #      contenttype = os.path.splitext(local_filename)[1]
-    #      logger.info("Downloading Excel from web")
-    #      response = await loop.run_in_executor(None, requests.get, provided_file_path, {'allow_redirects': True, 'timeout': 60})
-    #      if response.status_code != 200:
-    #          logger.error(f"Failed to download file: {response.status_code}")
-    #          return {"error": "Failed to download the provided file."}
-    #      with open(local_filename, "wb") as file:
-    #          file.write(response.content)
-
-    #     logger.info("Writing images to Excel")
-    #     failed_rows = await loop.run_in_executor(ThreadPoolExecutor(), write_excel_image, local_filename, temp_images_dir, preferred_image_method)
-    #     print(f"failed rows: {failed_rows}")
-    #     #if failed_rows != []:
-    #     if failed_img_urls:
-    #         print(failed_img_urls)
-    #         #fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_img_urls, local_filename, clean_results,failed_rows)
-    #         fail_rows_written = await loop.run_in_executor(ThreadPoolExecutor(), write_failed_downloads_to_excel, failed_img_urls,local_filename)
-    #         logger.error(f"Failed to write images for rows: {failed_rows}")
-    #         logger.error(f"Failed rows added to excel: {fail_rows_written})")
-    #
-    #     logger.info("Uploading file to space")
-    #     #public_url = upload_file_to_space(local_filename, local_filename, is_public=True)
-    #     is_public = True
-    #     public_url = await loop.run_in_executor(ThreadPoolExecutor(), upload_file_to_space, local_filename, local_filename,is_public,contenttype)
-    #     end_time = time.time()
-    #     execution_time = end_time - start_time
-    #     #await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, 'Your File Is Ready', public_url, local_filename)
-    #     if os.listdir(temp_images_dir) !=[]:
-    #         logger.info("Sending email")
-    #         await loop.run_in_executor(ThreadPoolExecutor(), send_email, send_to_email, f'Started {file_name}', public_url, local_filename,execution_time,'')
-    #     #await send_email(send_to_email, 'Your File Is Ready', public_url, local_filename)
-    #     logger.info("Cleaning up temporary directories")
-    #     await cleanup_temp_dirs([temp_images_dir, temp_excel_dir])
-    #
-    #     logger.info("Processing completed successfully")
-    #
-    #     return {"message": "Processing completed successfully.", "results": results, "public_url": public_url}
-    #
     except Exception as e:
-         logger.exception("An unexpected error occurred during processing: %s", e)
-         await loop.run_in_executor(ThreadPoolExecutor(), send_message_email, send_to_email, f'Started {file_name}', f"An unexpected error occurred during processing.\nError: {str(e)}")
-         return {"error": f"An unexpected error occurred during processing. Error: {e}"}
-    
-    
+        logger.exception("An unexpected error occurred during processing: %s", e)
+        asyncio.create_task(send_message_email(send_to_email, f'Started {file_name}',
+                                               f"An unexpected error occurred during processing.\nError: {str(e)}"))
+        # return {"error": f"An unexpected error occurred during processing. Error: {e}"}
 @app.post("/process-image-batch/")
 async def process_payload(background_tasks: BackgroundTasks, payload: dict):
     logger.info("Received request to process image batch")
-    #background_tasks.add_task(process_image_batch, payload)
-    await process_image_batch(payload)
+    background_tasks.add_task(process_image_batch, payload)
+    #await process_image_batch(payload)
     return {"message": "Processing started successfully. You will be notified upon completion."}
-
 @app.post("/generate-download-file/")
 async def process_file(background_tasks: BackgroundTasks, file_id: int):
     logger.info("Received request to process image batch")
-    #background_tasks.add_task(generate_download_file, str(file_id))
-    await generate_download_file((str(file_id)))
+    background_tasks.add_task(generate_download_file, str(file_id))
+    #await generate_download_file((str(file_id)))
     return {"message": "Processing started successfully. You will be notified upon completion."}
 
 async def process_with_semaphore(row, semaphore,fileid):
