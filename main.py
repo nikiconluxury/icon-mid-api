@@ -725,6 +725,8 @@ def process_image_batch(payload: dict):
             #print(tasks)
             #await asyncio.gather(*tasks, return_exceptions=True)
             chunk_size = len(search_df)//max_threads
+            if chunk_size == 0:
+                chunk_size = 1
             chunks = [search_df.iloc[i:i + chunk_size] for i in range(0, len(search_df), chunk_size)]
             #
             # results = []
