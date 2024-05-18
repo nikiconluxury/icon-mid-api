@@ -18,6 +18,7 @@ from urllib3.util.retry import Retry
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
 from base64 import b64encode
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import aiohttp
 from aiohttp import ClientTimeout
 from aiohttp_retry import RetryClient, ExponentialRetry
@@ -260,6 +261,7 @@ def get_endpoint():
      if endpoint_url:
          (endpoint,) = endpoint_url
          print(endpoint_url)
+         print(datetime.datetime.now())
      else:
          print("No EndpointURL")
          endpoint = "No EndpointURL"
@@ -280,81 +282,156 @@ def unpack_content(encoded_content):
         #     file.write(str(original_content))
         return original_content # Return as binary data
     return None
-async def process_search_row(search_string,endpoint,entry_id):
-        search_url = f"{endpoint}?query={search_string}"
-        print(search_url)
+# async def process_search_row_async(search_string,endpoint,entry_id):
+#         search_url = f"{endpoint}?query={search_string}"
+#         print(search_url)
+#
+#         try:
+#             response = requests.get(search_url, timeout=60)
+#             print(response.status_code)
+#             if response.status_code != 200 or response.json().get('body') is None:
+#                 print('trying again 1')
+#                 remove_endpoint(endpoint)
+#                 n_endpoint = remove_endpoint()
+#                 return await process_search_row(search_string,n_endpoint,entry_id)  # Add return here
+#             else:
+#                 response_json = response.json()
+#                 result = response_json.get('body', None)
+#                 if result:
+#                     unpacked_html = unpack_content(result)
+#                     parsed_data = GP(unpacked_html)
+#                     if parsed_data is None:
+#                         print('trying again 2')
+#                         remove_endpoint(endpoint)
+#                         n_endpoint = get_endpoint()
+#                         return await process_search_row(search_string,n_endpoint,entry_id)  # Add return here
+#                     if parsed_data[0][0] == 'No start_tag or end_tag':
+#                         print('trying again 3')
+#                         remove_endpoint(endpoint)
+#                         n_endpoint = get_endpoint()
+#                         return await process_search_row(search_string,n_endpoint,entry_id)
+#                     else:
+#                         print('parsed data!')
+#                         image_url = parsed_data[0]
+#                         image_desc = parsed_data[1]
+#                         image_source = parsed_data[2]
+#                         image_thumb = parsed_data[3]
+#
+#                         print(
+#                             f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
+#                         if image_url:
+#                             df = pd.DataFrame({
+#                                 'ImageUrl': image_url,
+#                                 'ImageDesc': image_desc,
+#                                 'ImageSource': image_source,
+#                                 'ImageUrlThumbnail':image_thumb,
+#                             })
+#                             if not df.empty:
+#                                     df.insert(0, 'EntryId', entry_id)
+#                                     df.to_sql(name='utb_ImageScraperResult', con=engine, index=False,
+#                                                      if_exists='append')
+#
+#                                     sql_query = f"update utb_ImageScraperRecords set  Step1 = getdate() where EntryID = {entry_id}"
+#
+#                                     # Create a cursor from the connection
+#                                     connection = pyodbc.connect(conn)
+#                                     cursor = connection.cursor()
+#
+#                                     # Execute the update query
+#                                     cursor.execute(sql_query)
+#
+#                                     # Commit the changes
+#                                     connection.commit()
+#
+#                                     # Close the connection
+#                                     connection.close()
+#                         else:
+#                             print('trying again 4')
+#                             remove_endpoint(endpoint)
+#                             n_endpoint = get_endpoint()
+#                             return await process_search_row(search_string,n_endpoint,entry_id)
+#         except requests.RequestException as e:
+#             print('trying again 5')
+#             remove_endpoint(endpoint)
+#             n_endpoint = get_endpoint()
+#             print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
+#             return await process_search_row(search_string,n_endpoint,entry_id)
+#
 
-        try:
-            response = requests.get(search_url, timeout=60)
-            print(response.status_code)
-            if response.status_code != 200 or response.json().get('body') is None:
-                print('trying again 1')
-                remove_endpoint(endpoint)
-                n_endpoint = remove_endpoint()
-                return await process_search_row(search_string,n_endpoint,entry_id)  # Add return here
-            else:
-                response_json = response.json()
-                result = response_json.get('body', None)
-                if result:
-                    unpacked_html = unpack_content(result)
-                    parsed_data = GP(unpacked_html)
-                    if parsed_data is None:
-                        print('trying again 2')
-                        remove_endpoint(endpoint)
-                        n_endpoint = get_endpoint()
-                        return await process_search_row(search_string,n_endpoint,entry_id)  # Add return here
-                    if parsed_data[0][0] == 'No start_tag or end_tag':
-                        print('trying again 3')
-                        remove_endpoint(endpoint)
-                        n_endpoint = get_endpoint()
-                        return await process_search_row(search_string,n_endpoint,entry_id)
-                    else:
-                        print('parsed data!')
-                        image_url = parsed_data[0]
-                        image_desc = parsed_data[1]
-                        image_source = parsed_data[2]
-                        image_thumb = parsed_data[3]
+def process_search_row(search_string, endpoint, entry_id):
+    search_url = f"{endpoint}?query={search_string}"
+    print(search_url)
 
-                        print(
-                            f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
-                        if image_url:
-                            df = pd.DataFrame({
-                                'ImageUrl': image_url,
-                                'ImageDesc': image_desc,
-                                'ImageSource': image_source,
-                                'ImageUrlThumbnail':image_thumb,
-                            })
-                            if not df.empty:
-                                    df.insert(0, 'EntryId', entry_id)
-                                    df.to_sql(name='utb_ImageScraperResult', con=engine, index=False,
-                                                     if_exists='append')
-
-                                    sql_query = f"update utb_ImageScraperRecords set  Step1 = getdate() where EntryID = {entry_id}"
-
-                                    # Create a cursor from the connection
-                                    connection = pyodbc.connect(conn)
-                                    cursor = connection.cursor()
-
-                                    # Execute the update query
-                                    cursor.execute(sql_query)
-
-                                    # Commit the changes
-                                    connection.commit()
-
-                                    # Close the connection
-                                    connection.close()
-                        else:
-                            print('trying again 4')
-                            remove_endpoint(endpoint)
-                            n_endpoint = get_endpoint()
-                            return await process_search_row(search_string,n_endpoint,entry_id)
-        except requests.RequestException as e:
-            print('trying again 5')
+    try:
+        response = requests.get(search_url, timeout=60)
+        print(response.status_code)
+        if response.status_code != 200 or response.json().get('body') is None:
+            print('trying again 1')
             remove_endpoint(endpoint)
-            n_endpoint = get_endpoint()
-            print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
-            return await process_search_row(search_string,n_endpoint,entry_id)
-        
+            n_endpoint = remove_endpoint()
+            return  process_search_row(search_string, n_endpoint, entry_id)  # Add return here
+        else:
+            response_json = response.json()
+            result = response_json.get('body', None)
+            if result:
+                unpacked_html = unpack_content(result)
+                parsed_data = GP(unpacked_html)
+                if parsed_data is None:
+                    print('trying again 2')
+                    remove_endpoint(endpoint)
+                    n_endpoint = get_endpoint()
+                    return  process_search_row(search_string, n_endpoint, entry_id)  # Add return here
+                if parsed_data[0][0] == 'No start_tag or end_tag':
+                    print('trying again 3')
+                    remove_endpoint(endpoint)
+                    n_endpoint = get_endpoint()
+                    return process_search_row(search_string, n_endpoint, entry_id)
+                else:
+                    print('parsed data!')
+                    image_url = parsed_data[0]
+                    image_desc = parsed_data[1]
+                    image_source = parsed_data[2]
+                    image_thumb = parsed_data[3]
+
+                    print(
+                        f'Image URL: {type(image_url)} {image_url}\nImage Desc:  {type(image_desc)} {image_desc}\nImage Source:{type(image_source)}  {image_source}')
+                    if image_url:
+                        df = pd.DataFrame({
+                            'ImageUrl': image_url,
+                            'ImageDesc': image_desc,
+                            'ImageSource': image_source,
+                            'ImageUrlThumbnail': image_thumb,
+                        })
+                        if not df.empty:
+                            df.insert(0, 'EntryId', entry_id)
+                            df.to_sql(name='utb_ImageScraperResult', con=engine, index=False,
+                                      if_exists='append')
+
+                            sql_query = f"update utb_ImageScraperRecords set  Step1 = getdate() where EntryID = {entry_id}"
+
+                            # Create a cursor from the connection
+                            connection = pyodbc.connect(conn)
+                            cursor = connection.cursor()
+
+                            # Execute the update query
+                            cursor.execute(sql_query)
+
+                            # Commit the changes
+                            connection.commit()
+
+                            # Close the connection
+                            connection.close()
+                    else:
+                        print('trying again 4')
+                        remove_endpoint(endpoint)
+                        n_endpoint = get_endpoint()
+                        return  process_search_row(search_string, n_endpoint, entry_id)
+    except requests.RequestException as e:
+        print('trying again 5')
+        remove_endpoint(endpoint)
+        n_endpoint = get_endpoint()
+        print(f"Error making request: {e}\nTrying Again: {n_endpoint}")
+        return  process_search_row(search_string, n_endpoint, entry_id)
         
 def update_file_generate_complete(file_id):
     query = f'update utb_ImageScraperFiles set CreateFileCompleteTime = getdate() Where ID = {file_id}'       
@@ -640,12 +717,24 @@ def process_image_batch(payload: dict):
     semaphore = asyncio.Semaphore(int(os.environ.get('MAX_THREAD')))  # Limit concurrent tasks to avoid overloading
 
     async def run_tasks():
+        max_threads=int(os.environ.get('MAX_THREAD'))
         try:
             # send_message_email(send_to_email, f'Started {file_name}',f'Total Rows: {len(rows)}\nFilename: {file_name}\nDB_file_id: {file_id_db}\nUploaded File: {provided_file_path}')
 
-            tasks = [process_with_semaphore(row, semaphore, file_id_db) for _, row in search_df.iterrows()]
-            await asyncio.gather(*tasks, return_exceptions=True)
-
+            #tasks = [process_with_semaphore(row, semaphore, file_id_db) for _, row in search_df.iterrows()]
+            #print(tasks)
+            #await asyncio.gather(*tasks, return_exceptions=True)
+            chunk_size = len(search_df)//max_threads
+            chunks = [search_df.iloc[i:i + chunk_size] for i in range(0, len(search_df), chunk_size)]
+            #
+            # results = []
+            with ThreadPoolExecutor(max_workers=max_threads) as executor:
+                 # Submit tasks to the executor
+                 futures = {executor.submit(thread_process_rows, chunk, file_id_db): chunk for chunk in chunks}
+            #
+            #     # Collect results as they complete
+                 #for future in as_completed(futures):
+            #         results.extend(future.result())
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, update_sort_order, file_id_db)
 
@@ -654,14 +743,21 @@ def process_image_batch(payload: dict):
         except Exception as e:
             logger.exception("An unexpected error occurred during processing: %s", e)
 
-            async def send_email_task():
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, send_message_email, send_to_email, f'Started {file_name}',
+            #async def send_email_task():
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, send_message_email, send_to_email, f'Started {file_name}',
                                            f"An unexpected error occurred during processing.\nError: {str(e)}")
 
-            asyncio.create_task(send_email_task())
+            #asyncio.create_task(send_email_task())
 
     asyncio.run(run_tasks())
+
+def thread_process_rows(rows, file_id_db):
+    results = []
+    for index, row in rows.iterrows():
+        endpoint = get_endpoint()
+        process_search_row(row['SearchString'], endpoint, row['EntryID'])
+
 @app.post("/process-image-batch/")
 async def process_payload(background_tasks: BackgroundTasks, payload: dict):
     logger.info("Received request to process image batch")
@@ -680,12 +776,15 @@ async def process_with_semaphore(row, semaphore,fileid):
     print(row)
     print(len(row))
     print('ROWWWWWWW END')
-    async with semaphore:
-        entry_id = row['EntryID']
-        searchString = row['SearchString']
-        print(f"Entry Id: {entry_id}\nSearch String {searchString}")
-        endpoint = get_endpoint()
-        await process_search_row(searchString,endpoint,entry_id)  # Assuming process_row is an async function you've defined elsewhere
+    #async with semaphore:
+
+    entry_id = row['EntryID']
+    searchString = row['SearchString']
+    print(f"Entry Id: {entry_id}\nSearch String {searchString}")
+    endpoint = get_endpoint()
+    #asyncio.gather(process_search_row(searchString,endpoint,entry_id))
+    #await process_search_row(searchString,endpoint,entry_id)  # Assuming process_row is an async function you've defined elsewhere
+    process_search_row(searchString, endpoint, entry_id)
 
 
 def highlight_cell(excel_file, cell_reference):
