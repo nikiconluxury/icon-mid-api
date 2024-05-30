@@ -297,6 +297,7 @@ async def process_search_row(search_string,endpoint,entry_id):
                 result = response_json.get('body', None)
                 if result:
                     unpacked_html = unpack_content(result)
+                    print(len(unpacked_html))
                     parsed_data = GP(unpacked_html)
                     if parsed_data is None:
                         print('trying again 2')
