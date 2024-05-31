@@ -100,15 +100,20 @@ def get_original_images(html_bytes):
     except Exception as e:
         print(e)
         soup = html_bytes.decode('utf-8')
+    with open ('soup.txt', 'w') as f:
+        f.write(soup)
+
 
     #print(f"type: { type(soup)}")
 
     start_tag = 'FINANCE",[22,1]]]]]'
-    end_tag = ':[null,null,null,1,['
+    #end_tag = ':[null,null,null,1,['
+    end_tag = ':[null,null,null,"glbl'
     # with open('text.html', 'w', encoding='utf-8') as file:
     #      file.write(soup)
     matched_google_image_data = LR().get(soup, start_tag, end_tag)
     if 'Error' in matched_google_image_data:
+        print('tags not found')
         return None
     if not matched_google_image_data:
         print('No matched_google_image_data')
