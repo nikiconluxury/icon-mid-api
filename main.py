@@ -622,7 +622,18 @@ async def generate_download_file(file_id):
 #          return {"error": f"An unexpected error occurred during processing. Error: {e}"}
 #
 import asyncio
+def get_lm_products(file_id):
 
+    connection = pyodbc.connect(conn)
+    cursor = connection.cursor()
+    query = f"exec usp_ImageScrapergetMatchFromRetail {file_id}"
+    print(query)
+    # Execute the update query
+    cursor.execute(query)
+
+    # Commit the changes
+    connection.commit()
+    connection.close()
 
 def process_image_batch(payload: dict):
     logger.info(f"Processing started for payload: {payload}")
@@ -635,6 +646,7 @@ def process_image_batch(payload: dict):
     file_id_db = insert_file_db(file_name, provided_file_path)
     print(file_id_db)
     load_payload_db(rows, file_id_db)
+    get_lm_products(file_id_db)
     search_df = get_records_to_search(file_id_db, engine)
     print(search_df)
 
