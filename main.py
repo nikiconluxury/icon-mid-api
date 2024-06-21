@@ -630,7 +630,7 @@ async def generate_download_file(file_id):
 import asyncio
 import ray
 ray.shutdown()
-ray.init("GCS_IP:GCS_PORT")
+ray.init("162.243.175.48:8265")
 def get_lm_products(file_id):
 
     connection = pyodbc.connect(conn)
