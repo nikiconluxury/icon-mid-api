@@ -18,6 +18,7 @@ from urllib3.util.retry import Retry
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition,Personalization,Cc,To
 from base64 import b64encode
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import aiohttp
 from aiohttp import ClientTimeout
 from aiohttp_retry import RetryClient, ExponentialRetry
@@ -261,6 +262,7 @@ def get_endpoint():
      if endpoint_url:
          (endpoint,) = endpoint_url
          print(endpoint_url)
+         print(datetime.datetime.now())
      else:
          print("No EndpointURL")
          endpoint = "No EndpointURL"
@@ -281,7 +283,6 @@ def unpack_content(encoded_content):
         #     file.write(str(original_content))
         return original_content # Return as binary data
     return None
-
 def process_search_row(search_string,endpoint,entry_id):
         search_url = f"{endpoint}?query={search_string}"
         print(search_url)
@@ -679,6 +680,7 @@ def process_image_batch(payload: dict):
     #####
     update_sort_order(file_id_db)
 
+
 @app.post("/process-image-batch/")
 async def process_payload(background_tasks: BackgroundTasks, payload: dict):
     logger.info("Received request to process image batch")
@@ -691,13 +693,15 @@ async def process_file(background_tasks: BackgroundTasks, file_id: int):
     background_tasks.add_task(generate_download_file, str(file_id))
     #await generate_download_file((str(file_id)))
     return {"message": "Processing started successfully. You will be notified upon completion."}
+
 @ray.remote
 def process_db_row(row):
     entry_id = row['EntryID']
     searchString = row['SearchString']
     print(f"Entry Id: {entry_id}\nSearch String {searchString}")
     endpoint = get_endpoint()
-    process_search_row(searchString,endpoint,entry_id)  # Assuming process_row is an async function you've defined elsewhere
+    process_search_row(searchString, endpoint, entry_id)
+
 
 
 def highlight_cell(excel_file, cell_reference):
