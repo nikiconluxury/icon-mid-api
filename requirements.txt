@@ -16,3 +16,4 @@ pyodbc
 sqlalchemy
 pandas
 chardet
+ray
