@@ -33,6 +33,6 @@ RUN odbcinst -j
 LABEL "com.datadoghq.ad.logs"='[<LOGS_CONFIG>]'
 # Make port 8000 available to the world outside this container
 EXPOSE 8080
-
+EXPOSE 8265
 # Run main.py when the container launches
 CMD ["python", "main.py"]
