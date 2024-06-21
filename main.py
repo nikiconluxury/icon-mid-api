@@ -629,8 +629,8 @@ async def generate_download_file(file_id):
 #
 import asyncio
 import ray
-ray.shutdown()
-ray.init()
+# ray.shutdown()
+# ray.init()
 def get_lm_products(file_id):
 
     connection = pyodbc.connect(conn)
