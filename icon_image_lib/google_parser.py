@@ -178,6 +178,11 @@ def get_original_images(html_bytes):
         final_descriptions = matched_description[:8]
         final_source_url = cleaned_source[:8]
         final_thumbs = cleaned_thumbs[:8]
+        print(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
+        max_length = max(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
+        min_length = min(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
+        if max_length != min_length:
+            raise ValueError
         return final_image_urls, final_descriptions, final_source_url,final_thumbs
     else:
         print('made it below 10')
@@ -203,7 +208,10 @@ def get_original_images(html_bytes):
         final_thumbs = cleaned_thumbs[:min_length]
         
         print(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
-        
+        max_length = max(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
+        min_length = min(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
+        if max_length != min_length:
+            raise ValueError
         # print(f"{min_length}\nImg Urls New: {len(final_image_urls)}\nDescriptions New: {len(final_descriptions)}\nSource Urls New: {len(final_source_url)}\nThumbs New: {len(final_thumbs)}")
         return final_image_urls, final_descriptions, final_source_url,final_thumbs
 def clean_source_url(s):
