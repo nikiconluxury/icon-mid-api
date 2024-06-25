@@ -629,8 +629,7 @@ async def generate_download_file(file_id):
 #
 import asyncio
 import ray
-ray.shutdown()
-ray.init()
+
 def get_lm_products(file_id):
 
     connection = pyodbc.connect(conn)
@@ -1083,3 +1082,7 @@ if __name__ == "__main__":
     print(os.environ)
     #uvicorn.run("main:app", port=8080, host='0.0.0.0', reload=True)
     uvicorn.run("main:app", port=8080, host='0.0.0.0')
+    if ray.is_initialized():
+        ray.shutdown()
+    ray.init(address='auto')
+
