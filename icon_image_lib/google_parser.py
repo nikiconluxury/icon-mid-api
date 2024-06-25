@@ -184,14 +184,26 @@ def get_original_images(html_bytes):
         min_length = len(cleaned_urls)
         print(f"Cleaned Urls: {len(cleaned_urls)}\n Matched Description: {len(matched_description)}\n Cleaned Sources: {len(cleaned_source)}")
         # print(f"{min_length}\nImg Urls: {len(cleaned_urls)}\nDescriptions: {len(matched_description)}\nSource Urls: {len(cleaned_source)}")
+        
+        
+        
         if len(matched_description) <= min_length:
-            matched_description = ["No descriptions found"]*min_length
+            matched_description = matched_description+["No descriptions found"]*(min_length - len(matched_description))
         if len(cleaned_source) <= min_length:
-            cleaned_source = ["No sources found"] * min_length
+            cleaned_source = cleaned_source+["No sources found"]*(min_length - len(cleaned_source))
+        if len(cleaned_thumbs) <= min_length:
+            cleaned_thumbs = cleaned_thumbs+["No thumbnails found"]*(min_length - len(cleaned_thumbs))
+            
+            
+            
+            
         final_image_urls = cleaned_urls[:min_length]
         final_descriptions = matched_description[:min_length]
         final_source_url = cleaned_source[:min_length]
         final_thumbs = cleaned_thumbs[:min_length]
+        
+        print(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
+        
         # print(f"{min_length}\nImg Urls New: {len(final_image_urls)}\nDescriptions New: {len(final_descriptions)}\nSource Urls New: {len(final_source_url)}\nThumbs New: {len(final_thumbs)}")
         return final_image_urls, final_descriptions, final_source_url,final_thumbs
 def clean_source_url(s):
