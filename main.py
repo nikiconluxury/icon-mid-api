@@ -657,22 +657,15 @@ def process_image_batch(payload: dict):
     get_lm_products(file_id_db)
     search_df = get_records_to_search(file_id_db, engine)
     print(search_df)
+    search_list=list(search_df.T.to_dict().values())
     ####
-    threads=[]
     start = datetime.datetime.now()
     print(f"Start of whole process: {start}")
     BATCH_SIZE=100
-    for index,row in search_df.iterrows():
-        thread_time = datetime.datetime.now()
-        print(f"Thread #{index} created: {thread_time}")
-        threads.append(process_db_row.remote(row))
-        if index % BATCH_SIZE == 0 and index != 0:
-            print(f"Batch #{int(index/BATCH_SIZE)} started: {datetime.datetime.now()}")
-            ray.get(threads)
-            print(f"Batch #{int(index/BATCH_SIZE)} ended: {datetime.datetime.now()}")
-            threads=[]
-    print(f"Final Batch started: {datetime.datetime.now()}")
-    ray.get(threads)
+    batches=[search_list[i:i+BATCH_SIZE] for i in range(0, len(search_list), BATCH_SIZE)]
+    print(f"Batches: {batches} CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC")
+    futures=[process_batch.remote(batch) for batch in batches]
+    ray.get(futures)
     end = datetime.datetime.now()
     print(f"End of whole process: {end}")
     print(f"It took {end - start} to complete")
@@ -700,6 +693,13 @@ def process_db_row(row):
     print(f"Entry Id: {entry_id}\nSearch String {searchString}")
     endpoint = get_endpoint()
     process_search_row(searchString, endpoint, entry_id)
+@ray.remote
+def process_batch(batch):
+    # Process each item in the batch in parallel
+    futures = [process_db_row.remote(data) for data in batch]
+    print(futures)
+    results = ray.get(futures)
+    return results
 
 
 

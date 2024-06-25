@@ -174,6 +174,12 @@ def get_original_images(html_bytes):
     # print('made it')
     if len(cleaned_urls) >= 8:
         print('made it above 10')
+        if len(matched_description) <= 8:
+            matched_description = matched_description+["No descriptions found"]*(8-len(matched_description))
+        if len(cleaned_source) <= 8:
+            cleaned_source = cleaned_source+["No sources found"]*(8-len(cleaned_source))
+        if len(cleaned_thumbs) <= 8:
+            cleaned_thumbs = cleaned_thumbs+["No thumbnails found"]*(8-len(cleaned_thumbs))
         final_image_urls = cleaned_urls[:8]
         final_descriptions = matched_description[:8]
         final_source_url = cleaned_source[:8]
@@ -185,9 +191,11 @@ def get_original_images(html_bytes):
         print(f"Cleaned Urls: {len(cleaned_urls)}\n Matched Description: {len(matched_description)}\n Cleaned Sources: {len(cleaned_source)}")
         # print(f"{min_length}\nImg Urls: {len(cleaned_urls)}\nDescriptions: {len(matched_description)}\nSource Urls: {len(cleaned_source)}")
         if len(matched_description) <= min_length:
-            matched_description = ["No descriptions found"]*min_length
+            matched_description = matched_description+["No descriptions found"]*(min_length-len(matched_description))
         if len(cleaned_source) <= min_length:
-            cleaned_source = ["No sources found"] * min_length
+            cleaned_source = cleaned_source+["No sources found"]*(min_length-len(cleaned_source))
+        if len(cleaned_thumbs) <= min_length:
+            cleaned_thumbs = cleaned_thumbs+["No thumbnails found"]*(min_length-len(cleaned_thumbs))
         final_image_urls = cleaned_urls[:min_length]
         final_descriptions = matched_description[:min_length]
         final_source_url = cleaned_source[:min_length]
