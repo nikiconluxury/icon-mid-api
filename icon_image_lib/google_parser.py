@@ -174,15 +174,30 @@ def get_original_images(html_bytes):
     # print('made it')
     if len(cleaned_urls) >= 8:
         print('made it above 10')
+
+        if len(matched_description) <= 8:
+            matched_description = matched_description+["No descriptions found"]*(8 - len(matched_description))
+        if len(cleaned_source) <= 8:
+            cleaned_source = cleaned_source+["No sources found"]*(8 - len(cleaned_source))
+        if len(cleaned_thumbs) <= 8:
+            cleaned_thumbs = cleaned_thumbs+["No thumbnails found"]*(8 - len(cleaned_thumbs))
+            
         final_image_urls = cleaned_urls[:8]
         final_descriptions = matched_description[:8]
         final_source_url = cleaned_source[:8]
-        final_thumbs = cleaned_thumbs[:8]
+        final_thumbs = cleaned_thumbs[:8]    
+            
+            
+            
+        #########    
         print(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
         max_length = max(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
         min_length = min(len(final_image_urls),len(final_descriptions),len(final_source_url),len(final_thumbs))
         if max_length != min_length:
             raise ValueError
+        #################
+        
+        
         return final_image_urls, final_descriptions, final_source_url,final_thumbs
     else:
         print('made it below 10')
